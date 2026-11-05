@@ -58,13 +58,16 @@ std::optional<double> length(std::string_view s) {
 }
 
 [[noreturn]] void rethrow_with_file(const ParseError& e, const std::filesystem::path& path) {
-  throw ParseError(e.line(), path.string() + ": " + e.what());
+  throw ParseError(path.string(), e.line(), e.message());
 }
 
 }  // namespace
 
 ParseError::ParseError(int line, const std::string& message)
-    : std::runtime_error("line " + std::to_string(line) + ": " + message), line_(line) {}
+    : std::runtime_error("line " + std::to_string(line) + ": " + message), line_(line), message_(message) {}
+
+ParseError::ParseError(const std::string& file, int line, const std::string& message)
+    : std::runtime_error(file + ": line " + std::to_string(line) + ": " + message), line_(line), message_(message) {}
 
 bool terrain_passable(char c) {
   switch (c) {

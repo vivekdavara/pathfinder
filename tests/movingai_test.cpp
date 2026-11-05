@@ -154,7 +154,10 @@ TEST(MapFormat, LoadNamesTheFileInErrors) {
     FAIL() << "short_row.map parsed";
   } catch (const ParseError& e) {
     EXPECT_EQ(e.line(), 6);
-    EXPECT_NE(std::string(e.what()).find("short_row.map: line 6: row 1 has"), std::string::npos) << e.what();
+    // The whole message: the file, the line once, then what's wrong.
+    EXPECT_EQ(std::string(e.what()),
+              (kData / "short_row.map").string() + ": line 6: row 1 has 2 characters, expected 3");
+    EXPECT_EQ(e.message(), "row 1 has 2 characters, expected 3");
   }
   EXPECT_THROW(load_map(kData / "no_such_file.map"), std::runtime_error);
 }
@@ -291,8 +294,9 @@ TEST(ScenarioFormat, LoadsAFileAndNamesItInErrors) {
     FAIL() << "short_entry.scen parsed";
   } catch (const ParseError& e) {
     EXPECT_EQ(e.line(), 3);
-    EXPECT_NE(std::string(e.what()).find("short_entry.scen: line 3: expected 9 fields"), std::string::npos)
-        << e.what();
+    EXPECT_EQ(std::string(e.what()), (kData / "short_entry.scen").string() +
+                                         ": line 3: expected 9 fields (bucket, map, width, height, start x, start y, "
+                                         "goal x, goal y, optimal length), got 7");
   }
   EXPECT_THROW(load_scenario(kData / "no_such_file.scen"), std::runtime_error);
 }

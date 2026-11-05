@@ -30,6 +30,11 @@ has() {
   grep -qF -- "$2" "$1" || { fail "'$2' not in $1 output:"; sed 's/^/  | /' "$1"; }
 }
 
+# is_line <file> <text>: the file has the text as a whole line.
+is_line() {
+  grep -qxF -- "$2" "$1" || { fail "no line '$2' in $1 output:"; sed 's/^/  | /' "$1"; }
+}
+
 # Generated maps, exactly.
 expect 0 "$cli" gen-map empty 3 2
 printf 'type octile\nheight 2\nwidth 3\nmap\n...\n...\n' | cmp -s - "$tmp/out" || fail "gen-map empty 3 2"
@@ -99,7 +104,7 @@ has "$tmp/err" "0..100"
 expect 2 "$cli" gen-map random 8 8 nan 1
 expect 2 "$cli" gen-map warehouse 1 1 1 1 0 1
 expect 2 "$cli" info "$data/short_row.map"
-has "$tmp/err" "short_row.map: line 6: row 1 has 2 characters, expected 3"
+is_line "$tmp/err" "pathfinder: $data/short_row.map: line 6: row 1 has 2 characters, expected 3"
 expect 2 "$cli" info "$data/no_such_file.map"
 has "$tmp/err" "can't open the file"
 expect 2 "$cli" gen-scen "$data/small.map" 17 1

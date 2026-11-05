@@ -13,15 +13,19 @@
 
 namespace pathfinder {
 
-// A file that doesn't follow the format. what() is "line N: ..." (or "<file>: line N: ..." from the load_
-// functions); line() is the 1-based line, or one past the last line when the file ends too early.
+// A file that doesn't follow the format. what() is "line N: <message>", or "<file>: line N: <message>" from the
+// load_ functions; line() is the 1-based line, or one past the last line when the file ends too early.
 class ParseError : public std::runtime_error {
  public:
   ParseError(int line, const std::string& message);
+  ParseError(const std::string& file, int line, const std::string& message);
   int line() const { return line_; }
+  // The message without the "<file>: line N: " prefix.
+  const std::string& message() const { return message_; }
 
  private:
   int line_;
+  std::string message_;
 };
 
 // Whether a map character is passable: '.', 'G' and 'S' are; '@', 'O', 'T' and 'W' aren't. Throws
