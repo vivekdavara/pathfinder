@@ -15,6 +15,7 @@ import argparse
 import hashlib
 import shutil
 import sys
+import unicodedata
 import urllib.request
 import zipfile
 from pathlib import Path, PurePosixPath
@@ -61,7 +62,7 @@ def download(name: str, dest: Path, expected_size: int) -> None:
 def members(archive: zipfile.ZipFile, directory: str, suffix: str) -> list[tuple[zipfile.ZipInfo, PurePosixPath]]:
     """Every file member and where under data/ it goes; refuses anything unexpected."""
     out = []
-    seen: set[PurePosixPath] = set()
+    seen: set[str] = set()
     total = 0
     for info in archive.infolist():
         if info.is_dir():
@@ -83,9 +84,12 @@ def members(archive: zipfile.ZipFile, directory: str, suffix: str) -> list[tuple
             relative = path
         else:
             raise SystemExit(f"unexpected member {info.filename!r} (not at the top level or in {directory}/); stopping")
-        if relative in seen:
-            raise SystemExit(f"member {info.filename!r} appears twice; stopping")
-        seen.add(relative)
+        # Compared as the file system will: macOS's APFS ignores case and Unicode normalisation, so x.map and X.map
+        # (or an NFC and an NFD spelling of one name) would be one file there (the day-1 second review).
+        key = unicodedata.normalize("NFC", str(relative)).casefold()
+        if key in seen:
+            raise SystemExit(f"member {info.filename!r} would land on the same file as another; stopping")
+        seen.add(key)
         out.append((info, relative))
     if total > MAX_TOTAL_BYTES:
         raise SystemExit(f"the archive unpacks to {total} bytes; stopping")

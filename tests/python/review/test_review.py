@@ -69,5 +69,5 @@ def test_fetch_maps_refuses_duplicate_members():
         z.writestr("x.map", "type octile\nheight 1\nwidth 1\nmap\n.\n")
         z.writestr("mapf-map/x.map", "type octile\nheight 1\nwidth 1\nmap\n@\n")
     buf.seek(0)
-    with zipfile.ZipFile(buf) as z, pytest.raises(SystemExit, match="appears twice"):
+    with zipfile.ZipFile(buf) as z, pytest.raises(SystemExit, match="would land on the same file"):
         fetch.members(z, "mapf-map", ".map")
