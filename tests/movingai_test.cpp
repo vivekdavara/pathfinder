@@ -2,9 +2,14 @@
 
 #include <gtest/gtest.h>
 
+#include <unistd.h>
+
 #include <cmath>
+#include <cstdio>
 #include <filesystem>
 #include <string>
+
+#include "pathfinder/generate.hpp"
 
 namespace pathfinder {
 namespace {
@@ -163,6 +168,42 @@ TEST(MapFormat, LoadNamesTheFileInErrors) {
     EXPECT_EQ(e.message(), "row 1 has 2 characters, expected 3");
   }
   EXPECT_THROW(load_map(kData / "no_such_file.map"), std::runtime_error);
+}
+
+TEST(ReadFile, ReadsWholeFilesOfEverySizeAroundItsBufferSize) {
+  // read_file reads 64 KiB at a time; a mutant that stopped after the first block survived the second review, since
+  // no file the tests read was that big (the benchmark maps are, but CI skips them).
+  namespace fs = std::filesystem;
+  const fs::path dir = fs::temp_directory_path() / ("pathfinder-read-file-" + std::to_string(::getpid()));
+  fs::create_directories(dir);
+  for (const std::size_t size : {std::size_t{0}, std::size_t{1}, std::size_t{65535}, std::size_t{65536},
+                                 std::size_t{65537}, std::size_t{131072}, std::size_t{200003}}) {
+    std::string bytes(size, '\0');
+    for (std::size_t i = 0; i < size; ++i) {
+      bytes[i] = static_cast<char>('a' + i % 26);
+    }
+    const fs::path file = dir / ("f" + std::to_string(size));
+    {
+      std::FILE* f = std::fopen(file.string().c_str(), "wb");
+      ASSERT_NE(f, nullptr);
+      ASSERT_EQ(std::fwrite(bytes.data(), 1, bytes.size(), f), bytes.size());
+      ASSERT_EQ(std::fclose(f), 0);
+    }
+    EXPECT_EQ(read_file(file), bytes) << size;
+  }
+  // And a map bigger than one block loads whole.
+  const Grid big = random_map(400, 300, 30.0, 4);
+  const fs::path map = dir / "big.map";
+  {
+    std::FILE* f = std::fopen(map.string().c_str(), "wb");
+    ASSERT_NE(f, nullptr);
+    const std::string text = write_map(big);
+    ASSERT_GT(text.size(), 65536U);
+    ASSERT_EQ(std::fwrite(text.data(), 1, text.size(), f), text.size());
+    ASSERT_EQ(std::fclose(f), 0);
+  }
+  EXPECT_EQ(load_map(map), big);
+  fs::remove_all(dir);
 }
 
 TEST(ScenarioFormat, ParsesTabsOrSpacesAndBothVersionSpellings) {
