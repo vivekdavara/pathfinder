@@ -2,6 +2,7 @@
 // problem with the instance, 2 for a usage error or a file that can't be read or parsed.
 
 #include <charconv>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <iostream>
@@ -9,6 +10,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "pathfinder/distance.hpp"
@@ -36,7 +38,7 @@ constexpr std::string_view kUsageText =
     "      print a .scen file of AGENTS random start-goal pairs on MAP (MAP_NAME defaults to MAP's file name)\n"
     "  pathfinder check MAP SCEN [AGENTS]\n"
     "      check that the scenario's first AGENTS entries (default: all) make an instance on MAP, that every\n"
-    "      goal is reachable, and how many stated optimal lengths are the 4-connected BFS distance\n";
+    "      goal is reachable, and how many stated optimal lengths are the octile distance (MovingAI's convention)\n";
 
 struct UsageError : std::runtime_error {
   using std::runtime_error::runtime_error;
@@ -143,25 +145,24 @@ int check(const std::vector<std::string_view>& args) {
   }
   std::cout << "instance of " << agents << " agents on a " << g.width() << "x" << g.height() << " map: valid\n";
   const auto unreachable = pf::unreachable_agents(inst);
-  // The stated optimal lengths: the MAPF sets' are 4-connected distances; the older sets' are octile (8-connected)
-  // ones, so a mismatch is reported, not an error.
+  // The stated optimal lengths. MovingAI's convention, MAPF sets included, is the octile distance (8-connected,
+  // diagonals sqrt(2), no corner cutting), which the files round to 8 decimals; the agents here move 4-connected, so
+  // this only checks the file, and a mismatch is reported, not an error.
   std::size_t matching = 0;
-  std::vector<std::size_t> mismatched;
+  std::vector<std::pair<std::size_t, double>> mismatched;
   for (std::size_t i = 0; i < agents; ++i) {
     const auto& a = inst.agents[i];
-    const auto d = pf::distances(g, a.start)[a.goal];
-    if (d != pf::kUnreachable && static_cast<double>(d) == s.entries[i].optimal_length) {
+    const double d = pf::octile_distances(g, a.start)[a.goal];
+    if (std::abs(d - s.entries[i].optimal_length) <= 1e-6) {
       ++matching;
-    } else if (d != pf::kUnreachable) {
-      mismatched.push_back(i);
+    } else {
+      mismatched.emplace_back(i, d);
     }
   }
-  std::cout << "optimal lengths equal to the BFS distance: " << matching << " of " << agents - unreachable.size()
-            << " reachable agents\n";
+  std::cout << "stated optimal lengths equal to the octile distance: " << matching << " of " << agents << "\n";
   for (std::size_t i = 0; i < mismatched.size() && i < 5; ++i) {
-    const auto& a = inst.agents[mismatched[i]];
-    std::cout << "  agent " << mismatched[i] << ": stated " << s.entries[mismatched[i]].optimal_length << ", BFS "
-              << pf::distances(g, a.start)[a.goal] << "\n";
+    const auto [agent, d] = mismatched[i];
+    std::cout << "  agent " << agent << ": stated " << s.entries[agent].optimal_length << ", octile " << d << "\n";
   }
   if (!unreachable.empty()) {
     std::cout << "unreachable goals: " << unreachable.size() << " agents (first: agent " << unreachable.front()

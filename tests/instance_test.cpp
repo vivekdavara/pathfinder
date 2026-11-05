@@ -35,11 +35,11 @@ TEST(Instance, TakesTheScenariosFirstKEntries) {
   EXPECT_NE(refusal([&] { make_instance(g, s, 4); }).find("has 3 entries, not 4"), std::string::npos);
 }
 
-TEST(Instance, TheSmallScenariosLengthsAreItsBfsDistances) {
+TEST(Instance, TheSmallScenariosLengthsAreOctileDistancesAsInMovingAisFiles) {
   const Grid g = load_map(kData / "small.map");
   const Scenario s = load_scenario(kData / "small.scen");
   for (const auto& e : s.entries) {
-    EXPECT_EQ(distances(g, g.id(e.start))[g.id(e.goal)], static_cast<std::uint32_t>(e.optimal_length));
+    EXPECT_NEAR(octile_distances(g, g.id(e.start))[g.id(e.goal)], e.optimal_length, 1e-8);  // 8 decimals
   }
 }
 

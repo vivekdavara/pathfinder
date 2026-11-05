@@ -1,6 +1,10 @@
 #include "pathfinder/distance.hpp"
 
 #include <array>
+#include <cmath>
+#include <functional>
+#include <queue>
+#include <utility>
 
 namespace pathfinder {
 
@@ -23,6 +27,49 @@ std::vector<std::uint32_t> distances(const Grid& grid, CellId source) {
       if (dist[d] == kUnreachable) {
         dist[d] = dist[c] + 1;
         queue.push_back(d);
+      }
+    }
+  }
+  return dist;
+}
+
+std::vector<double> octile_distances(const Grid& grid, CellId source) {
+  const double inf = std::numeric_limits<double>::infinity();
+  std::vector<double> dist(grid.cell_count(), inf);
+  if (!grid.passable(source)) {
+    return dist;
+  }
+  const double diagonal = std::sqrt(2.0);
+  using Entry = std::pair<double, CellId>;
+  std::priority_queue<Entry, std::vector<Entry>, std::greater<>> open;
+  dist[source] = 0.0;
+  open.emplace(0.0, source);
+  while (!open.empty()) {
+    const auto [d, c] = open.top();
+    open.pop();
+    if (d > dist[c]) {
+      continue;  // a stale entry
+    }
+    const Point p = grid.point(c);
+    for (std::int32_t dy = -1; dy <= 1; ++dy) {
+      for (std::int32_t dx = -1; dx <= 1; ++dx) {
+        if (dx == 0 && dy == 0) {
+          continue;
+        }
+        const Point q{p.x + dx, p.y + dy};
+        if (!grid.passable(q)) {
+          continue;
+        }
+        const bool diag = dx != 0 && dy != 0;
+        if (diag && (!grid.passable(Point{p.x + dx, p.y}) || !grid.passable(Point{p.x, p.y + dy}))) {
+          continue;  // it would cut a corner
+        }
+        const double nd = d + (diag ? diagonal : 1.0);
+        const CellId n = grid.id(q);
+        if (nd < dist[n]) {
+          dist[n] = nd;
+          open.emplace(nd, n);
+        }
       }
     }
   }

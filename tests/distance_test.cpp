@@ -2,6 +2,8 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <cmath>
 #include <cstdlib>
 
 #include "pathfinder/movingai.hpp"
@@ -58,6 +60,57 @@ TEST(Distances, AreSymmetric) {
     for (CellId b = 0; b < g.cell_count(); ++b) {
       if (g.passable(b)) {
         EXPECT_EQ(from_a[b], distances(g, b)[a]) << a << " " << b;
+      }
+    }
+  }
+}
+
+TEST(OctileDistances, OnAnOpenGridAreDiagonalsThenStraights) {
+  const Grid g(6, 4);
+  const auto d = octile_distances(g, g.id(Point{0, 0}));
+  for (CellId c = 0; c < g.cell_count(); ++c) {
+    const Point p = g.point(c);
+    const int lo = std::min(p.x, p.y);
+    const int hi = std::max(p.x, p.y);
+    EXPECT_NEAR(d[c], lo * std::sqrt(2.0) + (hi - lo), 1e-12) << c;
+  }
+}
+
+TEST(OctileDistances, NeverCutACornerAndMarkWhatTheyCantReach) {
+  // From (0, 1), (1, 0) is one diagonal away, but (0, 0) is blocked: the way round is two straight moves.
+  const Grid g = parse_map(
+      "type octile\nheight 3\nwidth 4\nmap\n"
+      "@..@\n"
+      "...@\n"
+      "@@@.\n");
+  const auto d = octile_distances(g, g.id(Point{0, 1}));
+  EXPECT_EQ(d[g.id(Point{1, 0})], 2.0);
+  EXPECT_EQ(d[g.id(Point{1, 1})], 1.0);
+  EXPECT_NEAR(d[g.id(Point{2, 0})], 1.0 + std::sqrt(2.0), 1e-12);
+  // (3, 2) touches (2, 1) only diagonally, between two blocked cells: unreachable, as with 4-connected moves.
+  EXPECT_TRUE(std::isinf(d[g.id(Point{3, 2})]));
+  EXPECT_TRUE(std::isinf(d[g.id(Point{0, 0})]));
+  EXPECT_TRUE(std::isinf(octile_distances(g, g.id(Point{0, 0}))[g.id(Point{1, 1})]));  // a blocked source
+}
+
+TEST(OctileDistances, AreNeverMoreThanBfsAndReachTheSameCells) {
+  const Grid g = parse_map(
+      "type octile\nheight 5\nwidth 6\nmap\n"
+      "......\n"
+      ".@@@@.\n"
+      ".@..@.\n"
+      ".@.@@.\n"
+      "......\n");
+  for (CellId a = 0; a < g.cell_count(); ++a) {
+    if (!g.passable(a)) {
+      continue;
+    }
+    const auto bfs = distances(g, a);
+    const auto oct = octile_distances(g, a);
+    for (CellId b = 0; b < g.cell_count(); ++b) {
+      EXPECT_EQ(bfs[b] == kUnreachable, std::isinf(oct[b])) << a << " " << b;
+      if (bfs[b] != kUnreachable) {
+        EXPECT_LE(oct[b], static_cast<double>(bfs[b])) << a << " " << b;
       }
     }
   }

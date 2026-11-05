@@ -18,6 +18,13 @@ inline constexpr std::uint32_t kUnreachable = std::numeric_limits<std::uint32_t>
 // itself. Precondition: source < grid.cell_count().
 std::vector<std::uint32_t> distances(const Grid& grid, CellId source);
 
+// The octile distance from `source` to every cell: the shortest path with 8-connected moves, straight moves costing 1
+// and diagonal moves sqrt(2), where a diagonal move needs both cells it passes between to be passable (no cutting
+// corners); +infinity where there is none. This is the convention of the MovingAI scenario files' "optimal length"
+// column, MAPF sets included, and it is used only to check those files: the agents here move 4-connected, and the
+// planners use distances() above. Precondition: source < grid.cell_count().
+std::vector<double> octile_distances(const Grid& grid, CellId source);
+
 // The grid's connected pieces of passable cells (4-connected).
 struct Components {
   static constexpr std::uint32_t kNone = std::numeric_limits<std::uint32_t>::max();

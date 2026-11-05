@@ -75,13 +75,14 @@ def test_scenarios_and_instances():
     assert len(s) == 3
     e = s.entries[0]
     assert (e.map, e.width, e.height, e.start, e.goal, e.optimal_length) == (
-        "small.map", 5, 4, pf.Point(0, 0), pf.Point(4, 3), 7.0)
+        "small.map", 5, 4, pf.Point(0, 0), pf.Point(4, 3), 6.41421356)
     assert pf.parse_scenario(pf.write_scenario(s)) == s
     g = pf.load_map(DATA / "small.map")
     inst = pf.make_instance(g, s, 2)
     assert [(a.start, a.goal) for a in inst.agents] == [(g.id(0, 0), g.id(4, 3)), (g.id(4, 0), g.id(0, 2))]
     for entry in s.entries:
-        assert pf.distances(g, g.id(*entry.start))[g.id(*entry.goal)] == entry.optimal_length
+        assert pf.octile_distances(g, g.id(*entry.start))[g.id(*entry.goal)] == pytest.approx(entry.optimal_length,
+                                                                                              abs=1e-8)
     with pytest.raises(ValueError, match="has 3 entries, not 4"):
         pf.make_instance(g, s, 4)
     with pytest.raises(ValueError, match="also agent 0's goal"):
@@ -104,7 +105,7 @@ def test_generators_match_the_cpp_pins():
     assert fnv1a(pf.write_map(pf.random_map(64, 48, 35.5, 42))) == 0x751A555B243E850A
     warehouse = pf.warehouse_map()
     assert fnv1a(pf.write_map(warehouse)) == 0x808A76F5F88E0D90
-    assert fnv1a(pf.write_scenario(pf.random_scenario(warehouse, 50, 2026, "warehouse.map"))) == 0x94D87A72EC8E4690
+    assert fnv1a(pf.write_scenario(pf.random_scenario(warehouse, 50, 2026, "warehouse.map"))) == 0x3E3C169C6DC3B76C
     small = pf.warehouse_map(pf.WarehouseLayout(shelf_rows=2, shelf_columns=3, shelf_width=3, shelf_height=1,
                                                 aisle=1, margin=1))
     assert pf.write_map(small).splitlines()[4:] == [".............", ".@@@.@@@.@@@.", ".............",

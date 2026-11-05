@@ -75,10 +75,19 @@ version 1
 
 - The first line is `version 1` (or `version 1.0`). Each following non-blank line has nine fields separated by tabs
   or spaces: bucket, map file name, map width, map height, start x, start y, goal x, goal y, optimal length.
-- Integers are decimal digits only; the optimal length is a decimal number (the older octile sets write lengths like
-  `5.82842712`). Coordinates must lie inside the stated width and height.
-- **An instance with k agents is the scenario's first k entries**, as in the MAPF literature (each benchmark
-  scenario lists 1,000 or so start-goal pairs; papers report "the first k agents of scenario random-1").
+- Integers are decimal digits only; the optimal length is a plain decimal number (no sign or exponent).
+  Coordinates must lie inside the stated width and height.
+- **The optimal length is the octile distance**, not the 4-connected one: the shortest path with 8-connected moves,
+  diagonals costing √2 and never cutting a corner (a diagonal needs both cells it passes between to be free), rounded
+  to 8 decimals. This holds for the MAPF scenarios too, although MAPF agents move 4-connected: in
+  `empty-8-8-random-1.scen`, (1, 4) → (4, 7) is stated as 4.24264069 (3√2), where 4-connected moves need 6.
+  `make check-maps` compares every entry of the 825 random scenarios with `octile_distances`. Pathfinder doesn't
+  plan with this column; its planners compute 4-connected distances themselves. (Day 1 first assumed the MAPF files
+  stated 4-connected lengths; only 46,078 of their 690,275 entries do, and a corner-cutting octile rule matched 64 of
+  272 sampled entries, against 272 of 272 without it.)
+- **An instance with k agents is the scenario's first k entries**, as in the MAPF literature (the 825 random
+  scenarios list 32 to 1,000 start-goal pairs each, 690,275 in all; papers report "the first k agents of scenario
+  random-1").
 - Building an instance checks the scenario against its map: the width and height match, every start and goal is
   passable, starts are distinct and goals are distinct. Whether each goal is reachable from its start is reported
   separately (an unreachable goal makes the instance unsolvable, which a planner must say, not loop on).
@@ -101,8 +110,9 @@ from a seed: the same seed gives the same file on every platform and compiler (p
   is connected to every other (a test checks it). This is the layout of the MovingAI `warehouse-*` maps and of
   robotic fulfilment floors: narrow aisles where robots must queue or detour, and open space at the edges.
 - **`random_scenario(grid, k, seed)`**: k agents with distinct starts and distinct goals, all drawn uniformly from the
-  grid's largest connected component, each agent's goal different from its own start. Its optimal length column is
-  the true 4-connected distance (BFS), and its bucket is that distance divided by 4, rounded down.
+  grid's largest connected component, each agent's goal different from its own start. As in MovingAI's files, its
+  optimal length column is the octile distance and its bucket that length divided by 4, rounded down, so a generated
+  file means what a benchmark file means.
 
 ## Checking a plan
 
@@ -212,7 +222,8 @@ the start.
 
 - Each format has hand-written good and bad files: every error names its line, and write-then-parse gives back the
   same grid or scenario.
-- Every MovingAI MAPF map and scenario parses (when `data/` has been fetched; CI skips that test and says so).
+- Every MovingAI MAPF map and scenario parses, and each scenario is a valid instance of all its entries with every
+  goal reachable (when `data/` has been fetched; CI skips that test and says so).
 - The generators are pinned by hashes of their output, so a change in the random stream or the layout shows up as a
   failing test on every platform at once.
 - The validator has a test for each rule, with a small plan that breaks only that rule, and one for each kind of

@@ -176,6 +176,15 @@ void bind_instances(py::module_& m) {
       },
       "grid"_a, "source"_a, "BFS distance from source to every cell (UNREACHABLE where there is no way).");
 
+  m.def(
+      "octile_distances",
+      [](const Grid& g, CellId source) {
+        check_cell(g, source);
+        return octile_distances(g, source);
+      },
+      "grid"_a, "source"_a,
+      "Octile (8-connected, no corner cutting) distances: MovingAI's 'optimal length' convention; inf if none.");
+
   py::class_<Components>(m, "Components")
       .def_readonly("label", &Components::label)
       .def_readonly("sizes", &Components::sizes)

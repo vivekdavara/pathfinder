@@ -1,7 +1,7 @@
 # Thin wrappers over the CMake presets (CMakePresets.json). `make check` is what every commit must pass.
 JOBS ?= $(shell sysctl -n hw.ncpu 2>/dev/null || nproc)
 
-.PHONY: check release asan gcc-check venv clean
+.PHONY: check release asan gcc-check maps check-maps venv clean
 
 # The Python environment the presets build the module for (Python_EXECUTABLE), with pytest.
 PYTHON ?= python3.11
@@ -34,6 +34,18 @@ asan:
 # CI's GCC job catches warnings Clang doesn't give, and this finds most of them before a push (scripts/gcc_check.sh).
 gcc-check: $(VENV_STAMP)
 	scripts/gcc_check.sh
+
+# The MovingAI MAPF benchmark maps and random scenarios, downloaded into data/ and checked against pinned SHA-256s
+# (scripts/fetch_maps.py). They aren't committed; the tests that read them skip when they're missing.
+maps:
+	python3 -I scripts/fetch_maps.py
+
+# Every benchmark scenario through `pathfinder check` (optimised build): a valid instance of all its entries, every
+# goal reachable, every stated optimal length the octile distance (scripts/check_maps.sh).
+check-maps:
+	cmake --preset release >/dev/null
+	cmake --build --preset release -j $(JOBS) --target pathfinder_cli
+	scripts/check_maps.sh build/release/pathfinder data
 
 clean:
 	rm -rf build

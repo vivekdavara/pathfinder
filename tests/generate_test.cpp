@@ -159,9 +159,10 @@ TEST(RandomScenario, DrawsDistinctStartsAndGoalsInTheLargestPiece) {
     EXPECT_NE(a, b);
     starts.insert(a);
     goals.insert(b);
-    const auto d = distances(g, a)[b];
-    EXPECT_EQ(e.optimal_length, static_cast<double>(d));
-    EXPECT_EQ(e.bucket, static_cast<int>(d / 4));
+    const double d = octile_distances(g, a)[b];
+    EXPECT_EQ(e.optimal_length, d);
+    EXPECT_EQ(e.bucket, static_cast<int>(std::floor(d / 4.0)));
+    EXPECT_NE(distances(g, a)[b], kUnreachable);
   }
   EXPECT_EQ(starts.size(), 200U);
   EXPECT_EQ(goals.size(), 200U);
@@ -210,7 +211,7 @@ TEST(RandomScenario, StartsAreUniform) {
 
 TEST(RandomScenario, IsTheSameOnEveryPlatform) {
   const Grid g = warehouse_map(WarehouseLayout{});
-  EXPECT_EQ(fnv1a(write_scenario(random_scenario(g, 50, 2026, "warehouse.map"))), 0x94d87a72ec8e4690ULL);
+  EXPECT_EQ(fnv1a(write_scenario(random_scenario(g, 50, 2026, "warehouse.map"))), 0x3e3c169c6dc3b76cULL);
 }
 
 }  // namespace

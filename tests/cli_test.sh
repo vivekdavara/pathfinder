@@ -52,18 +52,20 @@ has "$tmp/out" "passable 17 of 20"
 has "$tmp/out" "pieces 1"
 has "$tmp/out" "largest piece 17"
 
-# A generated scenario checks out on its map, with BFS lengths throughout.
+# A generated scenario checks out on its map, with octile lengths throughout.
 expect 0 "$cli" gen-scen "$tmp/a.map" 25 7
 has "$tmp/out" "version 1"
 has "$tmp/out" "a.map"
 cp "$tmp/out" "$tmp/a.scen"
 expect 0 "$cli" check "$tmp/a.map" "$tmp/a.scen"
 has "$tmp/out" "instance of 25 agents on a 32x32 map: valid"
-has "$tmp/out" "optimal lengths equal to the BFS distance: 25 of 25 reachable agents"
+has "$tmp/out" "stated optimal lengths equal to the octile distance: 25 of 25"
 expect 0 "$cli" gen-scen "$tmp/a.map" 3 7 other-name.map
 has "$tmp/out" "other-name.map"
 expect 0 "$cli" check "$data/small.map" "$data/small.scen" 2
 has "$tmp/out" "instance of 2 agents"
+expect 0 "$cli" check "$data/small.map" "$data/small.scen"
+has "$tmp/out" "stated optimal lengths equal to the octile distance: 3 of 3"
 
 # Problems with the instance: exit 1.
 printf 'version 1\n0\tm.map\t5\t4\t0\t0\t4\t3\t7\n0\tm.map\t5\t4\t4\t0\t4\t3\t3\n' > "$tmp/shared_goal.scen"
@@ -73,10 +75,10 @@ printf 'type octile\nheight 1\nwidth 3\nmap\n.@.\n' > "$tmp/split.map"
 printf 'version 1\n0\tsplit.map\t3\t1\t0\t0\t2\t0\t2\n' > "$tmp/split.scen"
 expect 1 "$cli" check "$tmp/split.map" "$tmp/split.scen"
 has "$tmp/out" "unreachable goals: 1 agents (first: agent 0)"
-printf 'version 1\n0\tsmall.map\t5\t4\t0\t0\t4\t3\t9.5\n' > "$tmp/octile.scen"
-expect 0 "$cli" check "$data/small.map" "$tmp/octile.scen"
-has "$tmp/out" "optimal lengths equal to the BFS distance: 0 of 1 reachable agents"
-has "$tmp/out" "agent 0: stated 9.5, BFS 7"
+printf 'version 1\n0\tsmall.map\t5\t4\t0\t0\t4\t3\t7\n' > "$tmp/manhattan.scen"
+expect 0 "$cli" check "$data/small.map" "$tmp/manhattan.scen"
+has "$tmp/out" "stated optimal lengths equal to the octile distance: 0 of 1"
+has "$tmp/out" "agent 0: stated 7, octile 6.41421"
 
 # Usage errors and unreadable files: exit 2.
 expect 2 "$cli"

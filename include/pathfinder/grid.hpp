@@ -17,8 +17,8 @@ struct Point {
 // A cell's index in a grid, y * width + x. Searches and plans use these; Point is for people and files.
 using CellId = std::uint32_t;
 
-// The largest width or height a grid may have. 10,000 x 10,000 cells still fit a CellId, and the largest MovingAI
-// benchmark maps are 1,024 x 1,024 (city and StarCraft maps) to about 1,260 on a side (Dragon Age).
+// The largest width or height a grid may have. 10,000 x 10,000 cells still fit a CellId; the largest map in the
+// MovingAI MAPF set is orz900d, 1,491 x 656.
 inline constexpr std::int32_t kMaxDimension = 10'000;
 
 // A 4-connected grid of passable and blocked cells. Moving to a passable neighbour (north, east, south or west) or

@@ -1,6 +1,7 @@
 include(GoogleTest)
 
 add_executable(pathfinder_tests
+  benchmark_maps_test.cpp
   distance_test.cpp
   generate_test.cpp
   grid_test.cpp
