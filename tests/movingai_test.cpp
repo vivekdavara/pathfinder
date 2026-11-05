@@ -286,6 +286,14 @@ TEST(ScenarioFormat, LoadsAFileAndNamesItInErrors) {
   } catch (const ParseError& e) {
     EXPECT_EQ(std::string(e.what()).rfind("line 2: ", 0), 0U) << e.what();
   }
+  try {
+    load_scenario(kData / "short_entry.scen");
+    FAIL() << "short_entry.scen parsed";
+  } catch (const ParseError& e) {
+    EXPECT_EQ(e.line(), 3);
+    EXPECT_NE(std::string(e.what()).find("short_entry.scen: line 3: expected 9 fields"), std::string::npos)
+        << e.what();
+  }
   EXPECT_THROW(load_scenario(kData / "no_such_file.scen"), std::runtime_error);
 }
 

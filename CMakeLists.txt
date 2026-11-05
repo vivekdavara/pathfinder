@@ -14,9 +14,14 @@ option(PATHFINDER_BUILD_TESTS "Build the GoogleTest suite" ${PROJECT_IS_TOP_LEVE
 option(PATHFINDER_BUILD_PYTHON "Build the Python module (pybind11) and run its tests" ${PROJECT_IS_TOP_LEVEL})
 option(PATHFINDER_WERROR "Treat compiler warnings as errors" OFF)
 set(PATHFINDER_SANITIZE "" CACHE STRING "Sanitizers to build with, e.g. address,undefined (empty for none)")
+option(PATHFINDER_COVERAGE "Build with Clang's source-based coverage (make coverage)" OFF)
 
 include(cmake/Warnings.cmake)
 include(cmake/Sanitizers.cmake)
+if(PATHFINDER_COVERAGE)
+  add_compile_options(-fprofile-instr-generate -fcoverage-mapping)
+  add_link_options(-fprofile-instr-generate)
+endif()
 
 # The planning library: grids, the MovingAI formats, generators, and the plan checker.
 add_library(pathfinder STATIC

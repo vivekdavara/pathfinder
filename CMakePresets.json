@@ -41,6 +41,16 @@
         "PATHFINDER_SANITIZE": "address,undefined",
         "PATHFINDER_BUILD_PYTHON": "OFF"
       }
+    },
+    {
+      "name": "coverage",
+      "displayName": "Debug with Clang source-based coverage (C++ tests and the CLI)",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "PATHFINDER_COVERAGE": "ON",
+        "PATHFINDER_BUILD_PYTHON": "OFF"
+      }
     }
   ],
   "buildPresets": [
@@ -55,6 +65,10 @@
     {
       "name": "asan",
       "configurePreset": "asan"
+    },
+    {
+      "name": "coverage",
+      "configurePreset": "coverage"
     }
   ],
   "testPresets": [
@@ -83,6 +97,17 @@
     {
       "name": "asan",
       "configurePreset": "asan",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "timeout": 300,
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "coverage",
+      "configurePreset": "coverage",
       "output": {
         "outputOnFailure": true
       },

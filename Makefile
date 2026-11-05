@@ -1,7 +1,7 @@
 # Thin wrappers over the CMake presets (CMakePresets.json). `make check` is what every commit must pass.
 JOBS ?= $(shell sysctl -n hw.ncpu 2>/dev/null || nproc)
 
-.PHONY: check release asan gcc-check maps check-maps venv clean
+.PHONY: check release asan coverage gcc-check maps check-maps venv clean
 
 # The Python environment the presets build the module for (Python_EXECUTABLE), with pytest.
 PYTHON ?= python3.11
@@ -29,6 +29,20 @@ asan:
 	cmake --preset asan >/dev/null
 	cmake --build --preset asan -j $(JOBS)
 	ctest --preset asan -j $(JOBS)
+
+# Line, function, region and branch coverage of the library (src/, include/) by the GoogleTest suite and the CLI
+# tests, with Clang's source-based coverage: each test process writes its own profile, they are merged, and the
+# report reads the test binary and the CLI together. (The Python module isn't instrumented.)
+LLVM_COV ?= $(shell xcrun --find llvm-cov 2>/dev/null || command -v llvm-cov)
+LLVM_PROFDATA ?= $(shell xcrun --find llvm-profdata 2>/dev/null || command -v llvm-profdata)
+coverage:
+	cmake --preset coverage >/dev/null
+	cmake --build --preset coverage -j $(JOBS)
+	rm -rf build/coverage/profiles
+	LLVM_PROFILE_FILE=$(CURDIR)/build/coverage/profiles/%p.profraw ctest --preset coverage -j $(JOBS) >/dev/null
+	$(LLVM_PROFDATA) merge -sparse build/coverage/profiles/*.profraw -o build/coverage/tests.profdata
+	$(LLVM_COV) report -instr-profile=build/coverage/tests.profdata build/coverage/tests/pathfinder_tests \
+	  -object build/coverage/pathfinder $(CURDIR)/src $(CURDIR)/include
 
 # This project's own sources compiled with GCC (Homebrew's g++-15 here), Debug and Release, warnings as errors:
 # CI's GCC job catches warnings Clang doesn't give, and this finds most of them before a push (scripts/gcc_check.sh).
