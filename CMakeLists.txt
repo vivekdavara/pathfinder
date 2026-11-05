@@ -21,6 +21,7 @@ include(cmake/Sanitizers.cmake)
 add_library(pathfinder
   src/grid.cpp
   src/distance.cpp
+  src/generate.cpp
   src/instance.cpp
   src/movingai.cpp)
 add_library(pathfinder::pathfinder ALIAS pathfinder)

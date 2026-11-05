@@ -2,6 +2,7 @@ include(GoogleTest)
 
 add_executable(pathfinder_tests
   distance_test.cpp
+  generate_test.cpp
   grid_test.cpp
   instance_test.cpp
   movingai_test.cpp)
