@@ -85,6 +85,29 @@ expect 0 "$cli" check "$data/small.map" "$tmp/manhattan.scen"
 has "$tmp/out" "stated optimal lengths equal to the octile distance: 0 of 1"
 has "$tmp/out" "agent 0: stated 7, octile 6.41421"
 
+# validate: a valid plan (exit 0), an invalid one (exit 1), and plans that can't be read (exit 2).
+expect 0 "$cli" validate "$data/small.map" "$data/small.scen" "$data/small.plan"
+has "$tmp/out" "valid plan for 2 agents: sum of costs 13, makespan 7"
+# Head on along the top row: they meet in (2, 0) at t=2 (one vertex conflict; passing through each other from the
+# same cell isn't a swap) ...
+printf 'version 1\nagents 2\n0 (0,0) (1,0) (2,0) (3,0) (4,0) (4,1) (4,2) (4,3)\n1 (4,0) (3,0) (2,0) (1,0) (0,0) (0,1) (0,2)\n' > "$tmp/meet.plan"
+expect 1 "$cli" validate "$data/small.map" "$data/small.scen" "$tmp/meet.plan"
+has "$tmp/out" "invalid plan: 1 problem"
+has "$tmp/out" "agents 0 and 1 are both at (2, 0) at t=2"
+# ... and with agent 1 waiting once, they swap (2, 0) and (3, 0) instead.
+printf 'version 1\nagents 2\n0 (0,0) (1,0) (2,0) (3,0) (4,0) (4,1) (4,2) (4,3)\n1 (4,0) (3,0) (3,0) (2,0) (1,0) (0,0) (0,1) (0,2)\n' > "$tmp/swap.plan"
+expect 1 "$cli" validate "$data/small.map" "$data/small.scen" "$tmp/swap.plan"
+has "$tmp/out" "invalid plan: 1 problem"
+has "$tmp/out" "agents 0 and 1 swap (2, 0) and (3, 0) between t=2 and t=3"
+printf 'version 1\nagents 4\n0 (0,0)\n1 (1,0)\n2 (2,0)\n3 (3,0)\n' > "$tmp/four.plan"
+expect 2 "$cli" validate "$data/small.map" "$data/small.scen" "$tmp/four.plan"
+has "$tmp/err" "the plan has 4 agents, the scenario only 3 entries"
+printf 'version 1\nagents 1\n0 (5,0)\n' > "$tmp/outside.plan"
+expect 2 "$cli" validate "$data/small.map" "$data/small.scen" "$tmp/outside.plan"
+is_line "$tmp/err" "pathfinder: $tmp/outside.plan: line 3: agent 0's cell (5,0) at t=0 is outside the 5x4 map"
+expect 1 "$cli" validate "$data/small.map" "$tmp/shared_goal.scen" "$data/small.plan"
+has "$tmp/out" "invalid instance"
+
 # Usage errors and unreadable files: exit 2.
 expect 2 "$cli"
 has "$tmp/out" "usage:"

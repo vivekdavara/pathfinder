@@ -129,6 +129,29 @@ everything it finds, in a fixed order, rather than stopping at the first problem
 
 It also computes each path's cost, the SOC and the makespan, by the definitions above.
 
+### Plan files (`.plan`)
+
+MovingAI defines no format for solutions, so Pathfinder has its own, small and strict, for planners' output, the
+CLI's `validate` and (day 5) the replay visualizer:
+
+```
+version 1
+agents 3
+0 (1,4) (2,4) (3,4)
+1 (5,5) (5,5) (5,6)
+2 (0,0)
+```
+
+- `version 1`, then `agents k`, then exactly k lines, the i-th beginning with the agent number i (in order, each
+  once) followed by that agent's cells at t = 0, 1, ..., each written `(x,y)` with no spaces inside, separated by
+  spaces or tabs. At least one cell per agent. Blank lines after the last agent are ignored; anything else is an
+  error, and errors name their line, as for maps.
+- Reading a plan needs its grid, to turn (x, y) into cell ids; a cell outside the grid is a parse error (as an id it
+  would wrap onto another row). Whether the plan is *valid* is `validate`'s business, not the parser's: a plan file
+  may hold an illegal or conflicting plan, so that the validator can say what's wrong with it.
+- `pathfinder validate MAP SCEN PLAN` builds the instance of the scenario's first k entries (k from the plan) and
+  prints the SOC and makespan of a valid plan, or each problem; it exits 0 for a valid plan, 1 for an invalid one.
+
 ## The planners (days 2 and 3)
 
 All planners take an instance and limits (wall time, expanded nodes) and return a plan, or say why there is none:

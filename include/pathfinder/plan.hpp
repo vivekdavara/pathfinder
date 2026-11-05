@@ -4,7 +4,9 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "pathfinder/grid.hpp"
@@ -60,6 +62,15 @@ struct PlanCheck {
 
   bool valid() const { return problems.empty(); }
 };
+
+// The plan file format (DESIGN.md "Plan files"). A plan file holds cells as (x, y), so reading one needs the grid;
+// a cell outside it is a ParseError. The parser checks only the format: whether the plan is valid is validate's
+// business. Throws ParseError (from load_plan, with the file name), or std::runtime_error if the file can't be read.
+Plan parse_plan(std::string_view text, const Grid& grid);
+Plan load_plan(const std::filesystem::path& path, const Grid& grid);
+// "version 1", "agents k", then each agent's number and cells. Throws std::invalid_argument for an empty path or a
+// cell id outside the grid (neither could be read back). parse_plan(write_plan(p, g), g) == p.
+std::string write_plan(const Plan& plan, const Grid& grid);
 
 // Checks a plan against an instance by DESIGN.md's rules, reporting everything it finds. Conflicts are looked for
 // among the non-empty paths even when some are illegal, with each agent staying at its path's last cell after the

@@ -1,5 +1,5 @@
 // pathfinder: the command-line tool over the library. Exit status 0 when all is well, 1 when `check` finds a
-// problem with the instance, 2 for a usage error or a file that can't be read or parsed.
+// problem with the instance or `validate` with the plan, 2 for a usage error or a file that can't be read or parsed.
 
 #include <charconv>
 #include <cmath>
@@ -17,6 +17,7 @@
 #include "pathfinder/generate.hpp"
 #include "pathfinder/instance.hpp"
 #include "pathfinder/movingai.hpp"
+#include "pathfinder/plan.hpp"
 
 namespace pf = pathfinder;
 
@@ -38,7 +39,10 @@ constexpr std::string_view kUsageText =
     "      print a .scen file of AGENTS random start-goal pairs on MAP (MAP_NAME defaults to MAP's file name)\n"
     "  pathfinder check MAP SCEN [AGENTS]\n"
     "      check that the scenario's first AGENTS entries (default: all) make an instance on MAP, that every\n"
-    "      goal is reachable, and how many stated optimal lengths are the octile distance (MovingAI's convention)\n";
+    "      goal is reachable, and how many stated optimal lengths are the octile distance (MovingAI's convention)\n"
+    "  pathfinder validate MAP SCEN PLAN\n"
+    "      check a .plan file for the scenario's first k entries (k from the plan): its sum of costs and makespan,\n"
+    "      or every problem with it\n";
 
 struct UsageError : std::runtime_error {
   using std::runtime_error::runtime_error;
@@ -172,6 +176,40 @@ int check(const std::vector<std::string_view>& args) {
   return kOk;
 }
 
+int validate_plan(const std::vector<std::string_view>& args) {
+  need(args, 3, 3);
+  const pf::Grid g = pf::load_map(std::filesystem::path(args[0]));
+  const pf::Scenario s = pf::load_scenario(std::filesystem::path(args[1]));
+  const pf::Plan plan = pf::load_plan(std::filesystem::path(args[2]), g);
+  if (plan.size() > s.entries.size()) {
+    throw UsageError("the plan has " + std::to_string(plan.size()) + " agents, the scenario only " +
+                     std::to_string(s.entries.size()) + " entries");
+  }
+  pf::Instance inst;
+  try {
+    inst = pf::make_instance(g, s, plan.size());
+  } catch (const std::invalid_argument& e) {
+    std::cout << "invalid instance: " << e.what() << "\n";
+    return kProblem;
+  }
+  const pf::PlanCheck check = pf::validate(inst, plan);
+  if (check.valid()) {
+    std::cout << "valid plan for " << plan.size() << " agents: sum of costs " << check.sum_of_costs << ", makespan "
+              << check.makespan << "\n";
+    return kOk;
+  }
+  constexpr std::size_t kShown = 20;
+  std::cout << "invalid plan: " << check.problems.size() << (check.problems.size() == 1 ? " problem" : " problems")
+            << "\n";
+  for (std::size_t i = 0; i < check.problems.size() && i < kShown; ++i) {
+    std::cout << "  " << pf::describe(check.problems[i], g) << "\n";
+  }
+  if (check.problems.size() > kShown) {
+    std::cout << "  ... and " << check.problems.size() - kShown << " more\n";
+  }
+  return kProblem;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -193,6 +231,9 @@ int main(int argc, char** argv) {
     }
     if (all[0] == "check") {
       return check(args);
+    }
+    if (all[0] == "validate") {
+      return validate_plan(args);
     }
     throw UsageError("unknown command '" + std::string(all[0]) + "'");
   } catch (const UsageError& e) {

@@ -143,3 +143,17 @@ def test_path_cost():
         pf.path_cost([], 7)
     with pytest.raises(ValueError):
         pf.path_cost([5, 6], 7)
+
+
+def test_plan_files_round_trip_and_validate():
+    g = pf.load_map(DATA / "small.map")
+    plan = pf.load_plan(DATA / "small.plan", g)
+    assert [len(p) for p in plan] == [8, 7]
+    assert pf.parse_plan(pf.write_plan(plan, g), g) == plan
+    check = pf.validate(pf.make_instance(g, pf.load_scenario(DATA / "small.scen"), 2), plan)
+    assert check.valid and check.sum_of_costs == 13 and check.makespan == 7
+    with pytest.raises(pf.ParseError) as err:
+        pf.parse_plan("version 1\nagents 1\n0 (5,0)\n", g)
+    assert err.value.line == 3 and "outside the 5x4 map" in str(err.value)
+    with pytest.raises(ValueError):
+        pf.write_plan([[]], g)

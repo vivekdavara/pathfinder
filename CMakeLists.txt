@@ -30,7 +30,8 @@ add_library(pathfinder STATIC
   src/generate.cpp
   src/instance.cpp
   src/movingai.cpp
-  src/plan.cpp)
+  src/plan.cpp
+  src/plan_file.cpp)
 add_library(pathfinder::pathfinder ALIAS pathfinder)
 target_include_directories(pathfinder PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_compile_features(pathfinder PUBLIC cxx_std_20)

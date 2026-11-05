@@ -250,6 +250,9 @@ void bind_plans(py::module_& m) {
     return path_cost(path, goal);
   }, "path"_a, "goal"_a);
   m.def("describe", &describe, "problem"_a, "grid"_a);
+  m.def("parse_plan", &parse_plan, "text"_a, "grid"_a, "A plan (a list of paths of cell ids) from a .plan file's text.");
+  m.def("load_plan", &load_plan, "path"_a, "grid"_a);
+  m.def("write_plan", &write_plan, "plan"_a, "grid"_a);
   m.def("validate", &validate, "instance"_a, "plan"_a,
         "Checks a plan (a list of paths, each a list of cell ids) by DESIGN.md's rules.");
 }

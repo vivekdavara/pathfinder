@@ -8,6 +8,7 @@ add_executable(pathfinder_tests
   instance_test.cpp
   movingai_test.cpp
   parser_robustness_test.cpp
+  plan_file_test.cpp
   plan_test.cpp)
 target_link_libraries(pathfinder_tests PRIVATE pathfinder::pathfinder GTest::gtest_main)
 # Where the tests find their data files (tests/data) and the fetched benchmark maps (data/).
