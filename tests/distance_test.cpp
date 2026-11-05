@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdlib>
 
+#include "pathfinder/generate.hpp"
 #include "pathfinder/movingai.hpp"
 
 namespace pathfinder {
@@ -111,6 +112,21 @@ TEST(OctileDistances, AreNeverMoreThanBfsAndReachTheSameCells) {
       EXPECT_EQ(bfs[b] == kUnreachable, std::isinf(oct[b])) << a << " " << b;
       if (bfs[b] != kUnreachable) {
         EXPECT_LE(oct[b], static_cast<double>(bfs[b])) << a << " " << b;
+      }
+    }
+  }
+}
+
+TEST(OctileDistances, TheSinglePairSearchGivesTheSameBitsAsTheFullOne) {
+  // Every pair on two random maps: octile_distance stops early, but must agree exactly (==, not near), or the
+  // generated scenarios would change.
+  for (const std::uint64_t seed : {std::uint64_t{1}, std::uint64_t{2}}) {
+    const Grid g = random_map(9, 7, 25.0, seed);
+    for (CellId a = 0; a < g.cell_count(); ++a) {
+      const auto all = octile_distances(g, a);
+      for (CellId b = 0; b < g.cell_count(); ++b) {
+        const double one = octile_distance(g, a, b);
+        EXPECT_TRUE(one == all[b] || (std::isinf(one) && std::isinf(all[b]))) << a << " " << b;
       }
     }
   }

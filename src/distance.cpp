@@ -33,7 +33,11 @@ std::vector<std::uint32_t> distances(const Grid& grid, CellId source) {
   return dist;
 }
 
-std::vector<double> octile_distances(const Grid& grid, CellId source) {
+namespace {
+
+// Dijkstra over 8-connected moves without corner cutting, from `source`; stops as soon as `stop` is settled (pass
+// an id past the grid's cells never to stop early).
+std::vector<double> octile_search(const Grid& grid, CellId source, CellId stop) {
   const double inf = std::numeric_limits<double>::infinity();
   std::vector<double> dist(grid.cell_count(), inf);
   if (!grid.passable(source)) {
@@ -49,6 +53,9 @@ std::vector<double> octile_distances(const Grid& grid, CellId source) {
     open.pop();
     if (d > dist[c]) {
       continue;  // a stale entry
+    }
+    if (c == stop) {
+      break;  // settled: nothing later can lower it
     }
     const Point p = grid.point(c);
     for (std::int32_t dy = -1; dy <= 1; ++dy) {
@@ -74,6 +81,16 @@ std::vector<double> octile_distances(const Grid& grid, CellId source) {
     }
   }
   return dist;
+}
+
+}  // namespace
+
+std::vector<double> octile_distances(const Grid& grid, CellId source) {
+  return octile_search(grid, source, static_cast<CellId>(grid.cell_count()));
+}
+
+double octile_distance(const Grid& grid, CellId source, CellId target) {
+  return octile_search(grid, source, target)[target];
 }
 
 Components components(const Grid& grid) {

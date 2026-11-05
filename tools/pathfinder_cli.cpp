@@ -157,7 +157,7 @@ int check(const std::vector<std::string_view>& args) {
   std::vector<std::pair<std::size_t, double>> mismatched;
   for (std::size_t i = 0; i < agents; ++i) {
     const auto& a = inst.agents[i];
-    const double d = pf::octile_distances(g, a.start)[a.goal];
+    const double d = pf::octile_distance(g, a.start, a.goal);
     if (std::abs(d - s.entries[i].optimal_length) <= 1e-6) {
       ++matching;
     } else {

@@ -25,6 +25,11 @@ std::vector<std::uint32_t> distances(const Grid& grid, CellId source);
 // planners use distances() above. Precondition: source < grid.cell_count().
 std::vector<double> octile_distances(const Grid& grid, CellId source);
 
+// octile_distances(grid, source)[target], computed by the same search stopped once `target` is settled: the same
+// operations up to that point, so the same value to the last bit, usually in a fraction of the time. Preconditions:
+// source and target < grid.cell_count().
+double octile_distance(const Grid& grid, CellId source, CellId target);
+
 // The grid's connected pieces of passable cells (4-connected).
 struct Components {
   static constexpr std::uint32_t kNone = std::numeric_limits<std::uint32_t>::max();

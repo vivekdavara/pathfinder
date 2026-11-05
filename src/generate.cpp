@@ -105,7 +105,7 @@ Scenario random_scenario(const Grid& grid, std::size_t agents, std::uint64_t see
   for (std::size_t i = 0; i < agents; ++i) {
     // MovingAI's convention for the optimal length (the octile distance) and the bucket (that length / 4, rounded
     // down). Both cells are in one 4-connected piece, so the octile distance is finite.
-    const double d = octile_distances(grid, starts[i])[goals[i]];
+    const double d = octile_distance(grid, starts[i], goals[i]);
     scenario.entries.push_back(ScenarioEntry{static_cast<int>(d / 4.0), map_name, grid.width(), grid.height(),
                                              grid.point(starts[i]), grid.point(goals[i]), d});
   }

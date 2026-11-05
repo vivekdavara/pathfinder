@@ -79,7 +79,7 @@ TEST_F(BenchmarkMaps, EveryScenarioIsAValidSolvableInstanceOfAllItsEntries) {
     // The stated optimal lengths are octile distances (8-connected, no corner cutting), rounded to 8 decimals:
     // the first entry of each file here (to keep `make check` quick); `make check-maps` compares all of them.
     const auto& first = s.entries.front();
-    EXPECT_NEAR(octile_distances(g, g.id(first.start))[g.id(first.goal)], first.optimal_length, 1e-6);
+    EXPECT_NEAR(octile_distance(g, g.id(first.start), g.id(first.goal)), first.optimal_length, 1e-6);
     ++lengths_checked;
   }
   EXPECT_EQ(grids.size(), 33U);
