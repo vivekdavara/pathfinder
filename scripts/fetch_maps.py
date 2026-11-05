@@ -61,6 +61,7 @@ def download(name: str, dest: Path, expected_size: int) -> None:
 def members(archive: zipfile.ZipFile, directory: str, suffix: str) -> list[tuple[zipfile.ZipInfo, PurePosixPath]]:
     """Every file member and where under data/ it goes; refuses anything unexpected."""
     out = []
+    seen: set[PurePosixPath] = set()
     total = 0
     for info in archive.infolist():
         if info.is_dir():
@@ -73,10 +74,18 @@ def members(archive: zipfile.ZipFile, directory: str, suffix: str) -> list[tuple
         if info.file_size > MAX_MEMBER_BYTES:
             raise SystemExit(f"member {info.filename!r} is {info.file_size} bytes; stopping")
         total += info.file_size
-        # The scenario archive's members are already under scen-random/; the map archive's are at its top level.
-        relative = path if path.parts[0] == directory else PurePosixPath(directory) / path.name
-        if len(relative.parts) != 2:
-            raise SystemExit(f"unexpected member {info.filename!r}; stopping")
+        # The map archive's members are at its top level; the scenario archive's directly under scen-random/.
+        # Anything deeper would have to be flattened, and two members could then land on the same file (the day-1
+        # review), so it stops instead, as it does for a duplicate.
+        if len(path.parts) == 1:
+            relative = PurePosixPath(directory) / path.name
+        elif len(path.parts) == 2 and path.parts[0] == directory:
+            relative = path
+        else:
+            raise SystemExit(f"unexpected member {info.filename!r} (not at the top level or in {directory}/); stopping")
+        if relative in seen:
+            raise SystemExit(f"member {info.filename!r} appears twice; stopping")
+        seen.add(relative)
         out.append((info, relative))
     if total > MAX_TOTAL_BYTES:
         raise SystemExit(f"the archive unpacks to {total} bytes; stopping")

@@ -39,3 +39,35 @@ def test_points_and_grids_compare_unequal_to_other_types():
     assert (p == None) is False  # noqa: E711
     assert p in [None, p]
     assert (pf.Grid(2, 2) == "grid") is False
+
+
+def load_fetch_maps():
+    spec = importlib.util.spec_from_file_location("fetch_maps_under_review", ROOT / "scripts" / "fetch_maps.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_fetch_maps_refuses_nested_map_members_instead_of_flattening_them():
+    # scripts/fetch_maps.py members(): a map-archive member in a subdirectory is "unexpected" (the real archive's are
+    # all at its top level), but it is flattened to mapf-map/<name>, so two members with the same name in different
+    # directories are both accepted and the second silently overwrites the first.
+    fetch = load_fetch_maps()
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("a/x.map", "type octile\nheight 1\nwidth 1\nmap\n.\n")
+        z.writestr("b/x.map", "type octile\nheight 1\nwidth 1\nmap\n@\n")
+    buf.seek(0)
+    with zipfile.ZipFile(buf) as z, pytest.raises(SystemExit):
+        fetch.members(z, "mapf-map", ".map")
+
+
+def test_fetch_maps_refuses_duplicate_members():
+    fetch = load_fetch_maps()
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("x.map", "type octile\nheight 1\nwidth 1\nmap\n.\n")
+        z.writestr("mapf-map/x.map", "type octile\nheight 1\nwidth 1\nmap\n@\n")
+    buf.seek(0)
+    with zipfile.ZipFile(buf) as z, pytest.raises(SystemExit, match="appears twice"):
+        fetch.members(z, "mapf-map", ".map")
