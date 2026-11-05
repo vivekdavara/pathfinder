@@ -37,7 +37,8 @@ struct WarehouseLayout {
 Grid warehouse_map(const WarehouseLayout& layout);
 
 // `agents` start-goal pairs drawn from the grid's largest connected piece with SplitMix64(seed): starts pairwise
-// distinct and uniform, goals pairwise distinct and uniform, and each agent's goal different from its own start.
+// distinct, goals pairwise distinct, each agent's goal different from its own start, and every such configuration
+// equally likely.
 // Each entry names `map_name` and the grid's size; as in MovingAI's files, its optimal length is the octile
 // distance (octile_distances) and its bucket that length / 4, rounded down. Throws std::invalid_argument unless
 // agents < the largest piece's size (so a goal other than the agent's own start always remains), or unless

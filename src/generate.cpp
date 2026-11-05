@@ -85,15 +85,20 @@ Scenario random_scenario(const Grid& grid, std::size_t agents, std::uint64_t see
   for (std::size_t i = 0; i < agents; ++i) {
     std::swap(starts[i], starts[i + rng.below(size - i)]);
   }
-  // Goals: the same, from a fresh copy, redrawing a goal equal to the agent's own start. At step i, size - i >= 2
-  // cells remain (agents < size), so at least one isn't the start and the redraw ends.
-  std::vector<CellId> goals = pool;
-  for (std::size_t i = 0; i < agents; ++i) {
-    std::size_t j = 0;
-    do {
-      j = i + rng.below(size - i);
-    } while (goals[j] == starts[i]);
-    std::swap(goals[i], goals[j]);
+  // Goals: the same from a fresh copy, all of them drawn again whenever some agent's goal is its own start. Plain
+  // rejection keeps every valid (starts, goals) configuration equally likely; redrawing only the offending goal
+  // didn't (the day-1 review: on a 3-cell row with 2 agents, some configurations came up twice as often as others).
+  // A draw is accepted with probability at least about 1/e (exactly 1/e for a derangement of many cells; more with
+  // fewer agents than cells), so this takes under 3 draws on average.
+  std::vector<CellId> goals;
+  bool clash = true;
+  while (clash) {
+    goals = pool;
+    clash = false;
+    for (std::size_t i = 0; i < agents; ++i) {
+      std::swap(goals[i], goals[i + rng.below(size - i)]);
+      clash = clash || goals[i] == starts[i];
+    }
   }
   Scenario scenario;
   scenario.entries.reserve(agents);

@@ -110,8 +110,9 @@ from a seed: the same seed gives the same file on every platform and compiler (p
   `2·margin + shelf_rows·shelf_height + (shelf_rows − 1)·aisle` high. With aisle ≥ 1 and margin ≥ 1 every free cell
   is connected to every other (a test checks it). This is the layout of the MovingAI `warehouse-*` maps and of
   robotic fulfilment floors: narrow aisles where robots must queue or detour, and open space at the edges.
-- **`random_scenario(grid, k, seed)`**: k agents with distinct starts and distinct goals, all drawn uniformly from the
-  grid's largest connected component, each agent's goal different from its own start. As in MovingAI's files, its
+- **`random_scenario(grid, k, seed)`**: k agents with distinct starts and distinct goals in the grid's largest
+  connected component, each agent's goal different from its own start, every such configuration equally likely
+  (the goals are drawn again, all of them, whenever one lands on its agent's start). As in MovingAI's files, its
   optimal length column is the octile distance and its bucket that length divided by 4, rounded down, so a generated
   file means what a benchmark file means.
 

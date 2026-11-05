@@ -91,5 +91,32 @@ TEST(ReviewMovingAi, LeadingZerosDontMakeAWholeNumberInvalid) {
   EXPECT_NO_THROW(parse_scenario("version 1\n0\tm.map\t2\t2\t0\t0\t1\t0000000000000000001\t1\n"));
 }
 
+// src/generate.cpp random_scenario: goals are a partial Fisher-Yates shuffle that redraws a goal equal to the agent's
+// own start. The number of choices left at step i depends on whether an earlier goal took agent i's start, so the
+// configurations are not equally likely: on a 3-cell row with 2 agents, every valid (starts, goals) configuration
+// should have probability 1/18, but those where agent 0's goal isn't agent 1's start come out twice as often as the
+// others (1/12 against 1/24). Seen per agent: agent 1's goal is agent 0's start 3/4 of the time, not 2/3.
+TEST(ReviewGenerate, RandomScenarioConfigurationsAreUniform) {
+  const Grid row(3, 1);
+  constexpr int kSeeds = 18000;
+  std::map<std::pair<std::pair<int, int>, std::pair<int, int>>, int> counts;
+  int goal1_is_start0 = 0;
+  for (std::uint64_t seed = 0; seed < kSeeds; ++seed) {
+    const Scenario s = random_scenario(row, 2, seed, "r.map");
+    const auto& a = s.entries[0];
+    const auto& b = s.entries[1];
+    ++counts[{{a.start.x, a.goal.x}, {b.start.x, b.goal.x}}];
+    goal1_is_start0 += b.goal.x == a.start.x ? 1 : 0;
+  }
+  EXPECT_EQ(counts.size(), 18U);
+  for (const auto& [config, n] : counts) {
+    EXPECT_GT(n, 880) << "starts " << config.first.first << "," << config.second.first << " goals "
+                      << config.first.second << "," << config.second.second;  // 1,000 expected, SD about 31
+    EXPECT_LT(n, 1120);
+  }
+  const double share = static_cast<double>(goal1_is_start0) / kSeeds;
+  EXPECT_NEAR(share, 2.0 / 3.0, 0.02);  // SD about 0.0035
+}
+
 }  // namespace
 }  // namespace pathfinder
