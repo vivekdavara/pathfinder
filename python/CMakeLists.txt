@@ -18,4 +18,8 @@ if(PATHFINDER_BUILD_TESTS)
     COMMAND ${Python_EXECUTABLE} -m pytest -q -p no:cacheprovider ${PROJECT_SOURCE_DIR}/tests/python)
   set_tests_properties(python.pytest PROPERTIES
     ENVIRONMENT "PYTHONPATH=${PROJECT_BINARY_DIR}/python;PATHFINDER_SOURCE_DIR=${PROJECT_SOURCE_DIR}")
+  # The example runs end to end and checks itself (it exits 1 if anything it checks is wrong).
+  add_test(NAME python.example
+    COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/examples/independent_paths.py --agents 40 --seed 7)
+  set_tests_properties(python.example PROPERTIES ENVIRONMENT "PYTHONPATH=${PROJECT_BINARY_DIR}/python")
 endif()

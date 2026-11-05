@@ -60,6 +60,8 @@ flowchart LR
 | `python/` | the pybind11 module `pathfinder._core` and the `pathfinder` package |
 | `tests/` | GoogleTest suites, `cli_test.sh`, `python/` (pytest), `data/` (small hand-written files), `review/` (the review's tests) |
 | `scripts/` | `fetch_maps.py` (the benchmark set), `check_maps.sh`, `gcc_check.sh` |
+| `examples/` | `independent_paths.py`: each agent's shortest path alone, and the conflicts the validator finds |
+| `bench/` | the Google Benchmark suite (`make bench`) |
 
 ## How to run
 
@@ -100,12 +102,18 @@ check = pf.validate(inst, [[a.start] for a in inst.agents])   # paths of one cel
 print(check.valid, [pf.describe(p, g) for p in check.problems][:2])
 ```
 
+`examples/independent_paths.py` shows why a planner is needed: it gives each agent its own shortest path, ignoring
+the others, and validates the result. With 40 agents on the default warehouse floor (204 free cells; seed 7) every
+path is legal and shortest, so the sum of costs, 591, is the lower bound CBS starts from, and the plan has 83 vertex
+and 23 swap conflicts (`PYTHONPATH=build/dev/python .venv/bin/python examples/independent_paths.py --agents 40
+--seed 7`); with 150 agents (seed 3), 1,145 and 318. CTest runs it as `python.example`.
+
 ## Results (day 1)
 
 Measured on an Apple M3, macOS 26.6.2, Apple Clang 21, on battery; every number comes from the command next to it.
 
-- **Tests**: 99 CTest tests (`ctest --preset dev -N`): 88 GoogleTest tests, the two reviews' 8, the CLI script (39
-  commands with their exit codes and outputs), the review's CLI check, and the pytest suite (20 tests). `make check`
+- **Tests**: 100 CTest tests (`ctest --preset dev -N`): 88 GoogleTest tests, the two reviews' 8, the CLI script (39
+  commands with their exit codes and outputs), the review's CLI check, the pytest suite (20 tests) and the example. `make check`
   passes, its tests in 8.6 s (CTest's "Total Test time"; most of it is the benchmark-set test). `make asan` passes
   (98 tests, 24.2 s, at `64eff8a`), and `make gcc-check` compiles every project file with g++-15, Debug and Release, warnings as errors. A
   fresh clone at `86ce608` ran every CI step (`make venv`, `make check`, `make release`, the benchmark smoke run):
