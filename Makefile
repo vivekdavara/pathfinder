@@ -1,7 +1,7 @@
 # Thin wrappers over the CMake presets (CMakePresets.json). `make check` is what every commit must pass.
 JOBS ?= $(shell sysctl -n hw.ncpu 2>/dev/null || nproc)
 
-.PHONY: check release asan venv clean
+.PHONY: check release asan gcc-check venv clean
 
 # The Python environment the presets build the module for (Python_EXECUTABLE), with pytest.
 PYTHON ?= python3.11
@@ -29,6 +29,11 @@ asan:
 	cmake --preset asan >/dev/null
 	cmake --build --preset asan -j $(JOBS)
 	ctest --preset asan -j $(JOBS)
+
+# This project's own sources compiled with GCC (Homebrew's g++-15 here), Debug and Release, warnings as errors:
+# CI's GCC job catches warnings Clang doesn't give, and this finds most of them before a push (scripts/gcc_check.sh).
+gcc-check: $(VENV_STAMP)
+	scripts/gcc_check.sh
 
 clean:
 	rm -rf build
