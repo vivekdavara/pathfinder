@@ -130,6 +130,8 @@ expect 2 "$cli" info "$data/short_row.map"
 is_line "$tmp/err" "pathfinder: $data/short_row.map: line 6: row 1 has 2 characters, expected 3"
 expect 2 "$cli" info "$data/no_such_file.map"
 has "$tmp/err" "can't open the file"
+expect 2 "$cli" info "$data"
+is_line "$tmp/err" "pathfinder: $data: can't read the file"
 expect 2 "$cli" gen-scen "$data/small.map" 17 1
 has "$tmp/err" "17 agents need at least 18"
 expect 2 "$cli" gen-scen "$data/small.map" 3 1 "bad name"

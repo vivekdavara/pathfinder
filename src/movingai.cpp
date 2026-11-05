@@ -6,9 +6,9 @@
 #include <charconv>
 #include <climits>
 #include <cmath>
-#include <fstream>
+#include <cstdio>
+#include <memory>
 #include <optional>
-#include <sstream>
 #include <system_error>
 
 namespace pathfinder {
@@ -312,16 +312,28 @@ std::string write_scenario(const Scenario& scenario) {
 }
 
 std::string read_file(const std::filesystem::path& path) {
-  std::ifstream in(path, std::ios::binary);
-  if (!in) {
+  // C stdio rather than an ifstream: an ifstream reports a failed read (a directory, an I/O error) as an early end
+  // of file, so a broken file would be parsed as a short one; ferror() tells the two apart.
+  struct Closer {
+    void operator()(std::FILE* f) const { std::fclose(f); }
+  };
+  const std::unique_ptr<std::FILE, Closer> file(std::fopen(path.string().c_str(), "rb"));
+  if (!file) {
     throw std::runtime_error(path.string() + ": can't open the file");
   }
-  std::ostringstream text;
-  text << in.rdbuf();
-  if (in.bad()) {
+  std::string text;
+  std::array<char, 1 << 16> buf{};
+  while (true) {
+    const std::size_t n = std::fread(buf.data(), 1, buf.size(), file.get());
+    text.append(buf.data(), n);
+    if (n < buf.size()) {
+      break;
+    }
+  }
+  if (std::ferror(file.get()) != 0) {
     throw std::runtime_error(path.string() + ": can't read the file");
   }
-  return std::move(text).str();
+  return text;
 }
 
 }  // namespace pathfinder

@@ -46,5 +46,19 @@ TEST(ReviewMovingAi, LoadErrorsReadFileThenLine) {
   }
 }
 
+// src/movingai.cpp read_file: opening a directory succeeds and the failed read isn't noticed (in.bad() stays false),
+// so load_map reports a parse error of an empty file ("line 1: the file ended before the 'map' line") instead of the
+// documented std::runtime_error for a file that can't be read. Any read failure is likewise taken as end of file.
+TEST(ReviewMovingAi, ReadingADirectoryIsAReadErrorNotAParseError) {
+  try {
+    load_map(kData);
+    FAIL() << "a directory loaded as a map";
+  } catch (const ParseError& e) {
+    FAIL() << "a ParseError: " << e.what();
+  } catch (const std::runtime_error&) {
+    SUCCEED();
+  }
+}
+
 }  // namespace
 }  // namespace pathfinder
