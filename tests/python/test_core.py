@@ -52,6 +52,19 @@ def test_grid_errors_become_python_exceptions():
         pf.distances(g, 4)
 
 
+def test_coordinates_of_any_size_are_outside_not_a_type_error():
+    g = pf.Grid(4, 3)
+    for x, y in [(4, 0), (0, 3), (-1, 0), (2**31, 0), (0, -(2**40)), (2**80, 1), (1, -(2**100))]:
+        assert g.passable(x, y) is False
+        with pytest.raises(IndexError, match="outside the 4x3 grid"):
+            g.id(x, y)
+        with pytest.raises(IndexError):
+            g.set_passable(x, y, False)
+    assert g.passable(3, 2) and g.id(3, 2) == 11
+    with pytest.raises(TypeError):
+        g.passable(1.5, 0)
+
+
 def test_maps_parse_write_and_report_the_line():
     g = pf.parse_map("type octile\nheight 2\nwidth 3\nmap\n.@.\n...\n")
     assert pf.write_map(g) == "type octile\nheight 2\nwidth 3\nmap\n.@.\n...\n"

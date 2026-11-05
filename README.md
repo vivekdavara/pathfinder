@@ -214,8 +214,6 @@ chose between duplicating and dropping a line wrongly (`bdc43d0`).
   folded into those two (the MAPF maps use only `.`, `@` and `T`).
 - `random_scenario` and `pathfinder check` run one octile (Dijkstra) search per agent, which is slow for many agents
   on the largest maps (orz900d, 1,491 x 656).
-- The Python bindings take coordinates as 32-bit integers, so `Grid.passable(x, y)` with a larger Python int raises
-  TypeError rather than returning False.
 
 ## Data and license
 

@@ -8,6 +8,7 @@
 #include <pybind11/stl/filesystem.h>
 
 #include <array>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -25,6 +26,35 @@ namespace pathfinder {
 namespace {
 
 std::string repr(Point p) { return "Point(" + std::to_string(p.x) + ", " + std::to_string(p.y) + ")"; }
+
+// The cell (x, y) if both Python ints name one inside the grid; nullopt for any other int, however large or
+// negative (a fixed-width parameter would make those a TypeError instead).
+std::optional<Point> inside(const Grid& g, const py::int_& x, const py::int_& y) {
+  const auto axis = [](const py::int_& v, std::int32_t size) -> std::optional<std::int32_t> {
+    int overflow = 0;
+    const long long value = PyLong_AsLongLongAndOverflow(v.ptr(), &overflow);
+    if (overflow != 0 || value < 0 || value >= size) {
+      return std::nullopt;
+    }
+    return static_cast<std::int32_t>(value);
+  };
+  const auto column = axis(x, g.width());
+  const auto row = axis(y, g.height());
+  if (!column || !row) {
+    return std::nullopt;
+  }
+  return Point{*column, *row};
+}
+
+Point inside_or_throw(const Grid& g, const py::int_& x, const py::int_& y) {
+  const auto p = inside(g, x, y);
+  if (!p) {
+    throw py::index_error("(" + py::str(x).cast<std::string>() + ", " + py::str(y).cast<std::string>() +
+                          ") is outside the " + std::to_string(g.width()) + "x" + std::to_string(g.height()) +
+                          " grid");
+  }
+  return *p;
+}
 
 void check_cell(const Grid& g, CellId c) {
   if (c >= g.cell_count()) {
@@ -51,21 +81,21 @@ void bind_grid(py::module_& m) {
       .def_property_readonly("cell_count", &Grid::cell_count)
       .def_property_readonly("passable_count", &Grid::passable_count)
       .def(
-          "passable", [](const Grid& g, std::int32_t x, std::int32_t y) { return g.passable(Point{x, y}); }, "x"_a,
-          "y"_a, "Whether (x, y) is passable; False outside the grid.")
+          "passable",
+          [](const Grid& g, const py::int_& x, const py::int_& y) {
+            const auto p = inside(g, x, y);
+            return p && g.passable(*p);
+          },
+          "x"_a, "y"_a, "Whether (x, y) is passable; False outside the grid (any int).")
       .def(
           "set_passable",
-          [](Grid& g, std::int32_t x, std::int32_t y, bool passable) { g.set_passable(Point{x, y}, passable); },
-          "x"_a, "y"_a, "passable"_a)
-      .def(
-          "id",
-          [](const Grid& g, std::int32_t x, std::int32_t y) {
-            if (!g.in_bounds(Point{x, y})) {
-              throw py::index_error("(" + std::to_string(x) + ", " + std::to_string(y) + ") is outside the grid");
-            }
-            return g.id(Point{x, y});
+          [](Grid& g, const py::int_& x, const py::int_& y, bool passable) {
+            g.set_passable(inside_or_throw(g, x, y), passable);
           },
-          "x"_a, "y"_a, "The cell id of (x, y): y * width + x.")
+          "x"_a, "y"_a, "passable"_a, "IndexError outside the grid.")
+      .def(
+          "id", [](const Grid& g, const py::int_& x, const py::int_& y) { return g.id(inside_or_throw(g, x, y)); },
+          "x"_a, "y"_a, "The cell id of (x, y): y * width + x; IndexError outside the grid.")
       .def(
           "point",
           [](const Grid& g, CellId c) {
