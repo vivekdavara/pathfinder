@@ -12,6 +12,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(PATHFINDER_BUILD_TESTS "Build the GoogleTest suite" ${PROJECT_IS_TOP_LEVEL})
 option(PATHFINDER_BUILD_PYTHON "Build the Python module (pybind11) and run its tests" ${PROJECT_IS_TOP_LEVEL})
+option(PATHFINDER_BUILD_BENCHMARKS "Build the Google Benchmark suite (bench/)" ${PROJECT_IS_TOP_LEVEL})
 option(PATHFINDER_WERROR "Treat compiler warnings as errors" OFF)
 set(PATHFINDER_SANITIZE "" CACHE STRING "Sanitizers to build with, e.g. address,undefined (empty for none)")
 option(PATHFINDER_COVERAGE "Build with Clang's source-based coverage (make coverage)" OFF)
@@ -45,7 +46,7 @@ set_target_properties(pathfinder_cli PROPERTIES OUTPUT_NAME pathfinder)
 target_link_libraries(pathfinder_cli PRIVATE pathfinder::pathfinder)
 pathfinder_set_warnings(pathfinder_cli)
 
-if(PATHFINDER_BUILD_TESTS OR PATHFINDER_BUILD_PYTHON)
+if(PATHFINDER_BUILD_TESTS OR PATHFINDER_BUILD_PYTHON OR PATHFINDER_BUILD_BENCHMARKS)
   include(cmake/Dependencies.cmake)
 endif()
 
@@ -56,4 +57,8 @@ endif()
 
 if(PATHFINDER_BUILD_PYTHON)
   add_subdirectory(python)
+endif()
+
+if(PATHFINDER_BUILD_BENCHMARKS)
+  add_subdirectory(bench)
 endif()

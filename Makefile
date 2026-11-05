@@ -1,7 +1,7 @@
 # Thin wrappers over the CMake presets (CMakePresets.json). `make check` is what every commit must pass.
 JOBS ?= $(shell sysctl -n hw.ncpu 2>/dev/null || nproc)
 
-.PHONY: check release asan coverage gcc-check maps check-maps venv clean
+.PHONY: check release asan bench coverage gcc-check maps check-maps venv clean
 
 # The Python environment the presets build the module for (Python_EXECUTABLE), with pytest.
 PYTHON ?= python3.11
@@ -23,6 +23,13 @@ release: $(VENV_STAMP)
 	cmake --preset release >/dev/null
 	cmake --build --preset release -j $(JOBS)
 	ctest --preset release -j $(JOBS)
+
+# Optimised build, then every benchmark 5 times; Google Benchmark reports the mean, median, stddev and CV of each.
+# BENCH_ARGS passes more flags, e.g. BENCH_ARGS=--benchmark_filter=Distances.
+bench:
+	cmake --preset release >/dev/null
+	cmake --build --preset release -j $(JOBS) --target pathfinder_bench
+	./build/release/bench/pathfinder_bench --benchmark_repetitions=5 --benchmark_report_aggregates_only=true $(BENCH_ARGS)
 
 # The C++ tests under AddressSanitizer and UndefinedBehaviorSanitizer.
 asan:

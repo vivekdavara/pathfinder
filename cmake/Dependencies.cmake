@@ -15,6 +15,20 @@ if(PATHFINDER_BUILD_TESTS)
   FetchContent_MakeAvailable(googletest)
 endif()
 
+if(PATHFINDER_BUILD_BENCHMARKS)
+  set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+  set(BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "" FORCE)
+  set(BENCHMARK_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+  set(BENCHMARK_INSTALL_DOCS OFF CACHE BOOL "" FORCE)
+  set(BENCHMARK_ENABLE_WERROR OFF CACHE BOOL "" FORCE)
+  FetchContent_Declare(benchmark
+    URL https://github.com/google/benchmark/archive/refs/tags/v1.9.5.tar.gz
+    URL_HASH SHA256=9631341c82bac4a288bef951f8b26b41f69021794184ece969f8473977eaa340
+    DOWNLOAD_EXTRACT_TIMESTAMP ON
+    SYSTEM)
+  FetchContent_MakeAvailable(benchmark)
+endif()
+
 if(PATHFINDER_BUILD_PYTHON)
   # pybind11 lives at github.com/pybind/pybind11 (the "pybind" organisation; PyPI's project page links there).
   # PYBIND11_FINDPYTHON makes it use CMake's FindPython, which honours Python_EXECUTABLE (the presets point it at

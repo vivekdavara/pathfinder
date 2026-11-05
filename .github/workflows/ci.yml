@@ -44,6 +44,8 @@ jobs:
         run: make check JOBS=4
       - name: Release build and tests
         run: make release JOBS=4
+      - name: Run the benchmarks briefly (a smoke test; the numbers aren't used)
+        run: ./build/release/bench/pathfinder_bench --benchmark_min_time=0.01s
 
   sanitizers:
     name: Linux, Clang 18, ASan + UBSan
