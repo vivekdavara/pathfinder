@@ -1,6 +1,7 @@
 // The Python face of the library: pathfinder._core. Cells cross the boundary as CellId integers (y * width + x) or as
 // (x, y) through Point; C++ exceptions become ValueError (std::invalid_argument, and ParseError, which also carries
-// .line), IndexError (std::out_of_range) and RuntimeError (std::runtime_error).
+// .line), IndexError (std::out_of_range) and RuntimeError (std::runtime_error). Every __eq__ is an operator, so
+// comparing with another type gives False (NotImplemented), not a TypeError.
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -37,7 +38,7 @@ void bind_grid(py::module_& m) {
       .def(py::init<std::int32_t, std::int32_t>(), "x"_a, "y"_a)
       .def_readwrite("x", &Point::x)
       .def_readwrite("y", &Point::y)
-      .def("__eq__", [](Point a, Point b) { return a == b; })
+      .def("__eq__", [](Point a, Point b) { return a == b; }, py::is_operator())
       .def("__hash__", [](Point p) { return py::hash(py::make_tuple(p.x, p.y)); })
       .def("__iter__", [](Point p) { return py::iter(py::make_tuple(p.x, p.y)); })
       .def("__repr__", &repr);
@@ -81,7 +82,7 @@ void bind_grid(py::module_& m) {
             return std::vector<CellId>(out.begin(), out.begin() + n);
           },
           "cell"_a, "The passable 4-neighbours of a cell, north, east, south, west.")
-      .def("__eq__", [](const Grid& a, const Grid& b) { return a == b; })
+      .def("__eq__", [](const Grid& a, const Grid& b) { return a == b; }, py::is_operator())
       .def("__repr__", [](const Grid& g) {
         return "Grid(" + std::to_string(g.width()) + "x" + std::to_string(g.height()) + ", " +
                std::to_string(g.passable_count()) + " passable)";
@@ -126,7 +127,7 @@ void bind_formats(py::module_& m) {
       .def_readwrite("start", &ScenarioEntry::start)
       .def_readwrite("goal", &ScenarioEntry::goal)
       .def_readwrite("optimal_length", &ScenarioEntry::optimal_length)
-      .def("__eq__", [](const ScenarioEntry& a, const ScenarioEntry& b) { return a == b; })
+      .def("__eq__", [](const ScenarioEntry& a, const ScenarioEntry& b) { return a == b; }, py::is_operator())
       .def("__repr__", [](const ScenarioEntry& e) {
         return "ScenarioEntry(" + e.map + ", " + repr(e.start) + " -> " + repr(e.goal) + ")";
       });
@@ -136,7 +137,7 @@ void bind_formats(py::module_& m) {
       .def(py::init([](std::vector<ScenarioEntry> entries) { return Scenario{std::move(entries)}; }), "entries"_a)
       .def_readwrite("entries", &Scenario::entries)
       .def("__len__", [](const Scenario& s) { return s.entries.size(); })
-      .def("__eq__", [](const Scenario& a, const Scenario& b) { return a == b; });
+      .def("__eq__", [](const Scenario& a, const Scenario& b) { return a == b; }, py::is_operator());
 
   m.def("parse_scenario", &parse_scenario, "text"_a);
   m.def("load_scenario", &load_scenario, "path"_a);
@@ -148,7 +149,7 @@ void bind_instances(py::module_& m) {
       .def(py::init([](CellId start, CellId goal) { return Agent{start, goal}; }), "start"_a, "goal"_a)
       .def_readwrite("start", &Agent::start)
       .def_readwrite("goal", &Agent::goal)
-      .def("__eq__", [](Agent a, Agent b) { return a == b; })
+      .def("__eq__", [](Agent a, Agent b) { return a == b; }, py::is_operator())
       .def("__repr__", [](Agent a) {
         return "Agent(" + std::to_string(a.start) + " -> " + std::to_string(a.goal) + ")";
       });
@@ -160,8 +161,12 @@ void bind_instances(py::module_& m) {
              return instance;
            }),
            "grid"_a, "agents"_a)
-      .def_readonly("grid", &Instance::grid)
-      .def_readonly("agents", &Instance::agents);
+      // Copies: a reference would let Python change a grid check_instance has already accepted (pybind11 ignores
+      // const), e.g. block an agent's start (the day-1 review).
+      .def_property_readonly(
+          "grid", [](const Instance& i) { return i.grid; }, "A copy of the instance's grid.")
+      .def_property_readonly(
+          "agents", [](const Instance& i) { return i.agents; }, "A copy of the instance's agents.");
 
   m.def("make_instance", &make_instance, "grid"_a, "scenario"_a, "agents"_a,
         "The instance of a scenario's first `agents` entries.");
@@ -234,7 +239,7 @@ void bind_plans(py::module_& m) {
       .def_readonly("time", &Problem::time)
       .def_readonly("cell", &Problem::cell)
       .def_readonly("to", &Problem::to)
-      .def("__eq__", [](const Problem& a, const Problem& b) { return a == b; });
+      .def("__eq__", [](const Problem& a, const Problem& b) { return a == b; }, py::is_operator());
 
   py::class_<PlanCheck>(m, "PlanCheck")
       .def_readonly("problems", &PlanCheck::problems)
