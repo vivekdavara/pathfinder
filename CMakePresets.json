@@ -12,7 +12,8 @@
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/${presetName}",
       "cacheVariables": {
-        "PATHFINDER_WERROR": "ON"
+        "PATHFINDER_WERROR": "ON",
+        "Python_EXECUTABLE": "${sourceDir}/.venv/bin/python"
       }
     },
     {
@@ -37,7 +38,8 @@
       "inherits": "base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "PATHFINDER_SANITIZE": "address,undefined"
+        "PATHFINDER_SANITIZE": "address,undefined",
+        "PATHFINDER_BUILD_PYTHON": "OFF"
       }
     }
   ],

@@ -11,6 +11,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(PATHFINDER_BUILD_TESTS "Build the GoogleTest suite" ${PROJECT_IS_TOP_LEVEL})
+option(PATHFINDER_BUILD_PYTHON "Build the Python module (pybind11) and run its tests" ${PROJECT_IS_TOP_LEVEL})
 option(PATHFINDER_WERROR "Treat compiler warnings as errors" OFF)
 set(PATHFINDER_SANITIZE "" CACHE STRING "Sanitizers to build with, e.g. address,undefined (empty for none)")
 
@@ -18,7 +19,7 @@ include(cmake/Warnings.cmake)
 include(cmake/Sanitizers.cmake)
 
 # The planning library: grids, the MovingAI formats, generators, and the plan checker.
-add_library(pathfinder
+add_library(pathfinder STATIC
   src/grid.cpp
   src/distance.cpp
   src/generate.cpp
@@ -28,10 +29,19 @@ add_library(pathfinder
 add_library(pathfinder::pathfinder ALIAS pathfinder)
 target_include_directories(pathfinder PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_compile_features(pathfinder PUBLIC cxx_std_20)
+# The Python module (a shared library) links it in.
+set_target_properties(pathfinder PROPERTIES POSITION_INDEPENDENT_CODE ON)
 pathfinder_set_warnings(pathfinder)
 
-if(PATHFINDER_BUILD_TESTS)
+if(PATHFINDER_BUILD_TESTS OR PATHFINDER_BUILD_PYTHON)
   include(cmake/Dependencies.cmake)
+endif()
+
+if(PATHFINDER_BUILD_TESTS)
   enable_testing()
   add_subdirectory(tests)
+endif()
+
+if(PATHFINDER_BUILD_PYTHON)
+  add_subdirectory(python)
 endif()
