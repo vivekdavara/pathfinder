@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <string>
 
@@ -49,8 +50,15 @@ TEST(PlanFile, EachErrorNamesItsLine) {
   EXPECT_EQ(plan_error("version 1\n", g), 2);
   EXPECT_EQ(plan_error("version 1\nagents\n", g), 2);
   EXPECT_EQ(plan_error("version 1\nagents -1\n", g), 2);
-  EXPECT_EQ(plan_error("version 1\nagents 1000001\n", g, &m), 2);
-  EXPECT_NE(m.find("at most 1000000"), std::string::npos) << m;
+  // At most one agent per cell: 12 here (a mutant refusing exactly 12 survived the second review).
+  EXPECT_EQ(plan_error("version 1\nagents 13\n", g, &m), 2);
+  EXPECT_NE(m.find("at most the grid's 12 cells"), std::string::npos) << m;
+  std::string twelve = "version 1\nagents 12\n";
+  for (int i = 0; i < 12; ++i) {
+    twelve += std::to_string(i) + " (" + std::to_string(i % 4) + "," + std::to_string(i / 4) + ")\n";
+  }
+  EXPECT_EQ(plan_error(twelve, g), -1);
+  EXPECT_EQ(plan_error("version 1\nagents 99999999999\n", g), 2);  // no huge allocation before failing
   EXPECT_EQ(plan_error("version 1\nagents 2\n0 (0,0)\n", g, &m), 4);
   EXPECT_NE(m.find("ended after 1 of 2 agents"), std::string::npos) << m;
   EXPECT_EQ(plan_error("version 1\nagents 2\n1 (0,0)\n0 (1,0)\n", g, &m), 3);
@@ -60,14 +68,17 @@ TEST(PlanFile, EachErrorNamesItsLine) {
   EXPECT_NE(m.find("agent 0 has no cells"), std::string::npos) << m;
   EXPECT_EQ(plan_error("version 1\nagents 1\n0 (0,0)\n1 (1,0)\n", g, &m), 4);
   EXPECT_NE(m.find("unexpected text after the last of the 1 agents"), std::string::npos) << m;
+  EXPECT_EQ(plan_error("version 1\nagents 1\n0 (0,0)\n\nmore\n", g), 5);  // after a blank line too
 }
 
 TEST(PlanFile, CellsAreParenthesisedPairsOfWholeNumbersInsideTheGrid) {
   const Grid g(4, 3);
   const auto with_cell = [](const std::string& c) { return "version 1\nagents 1\n0 (0,0) " + c + "\n"; };
   EXPECT_EQ(plan_error(with_cell("(3,2)"), g), -1);
+  // "(1,23" and "x1,2)" would read as (1,2) without the check on each parenthesis (two mutants that survived the
+  // second review).
   for (const std::string bad : {"(1, 2)", "1,2", "(1,2", "1,2)", "(1;2)", "(-1,2)", "(1,+2)", "(,2)", "(1,)", "()",
-                                "(1,2,3)", "(a,b)", "(1.0,2)"}) {
+                                "(1,2,3)", "(a,b)", "(1.0,2)", "(1,23", "x1,2)", "(1,2]", "[1,2)"}) {
     std::string m;
     EXPECT_EQ(plan_error(with_cell(bad), g, &m), 3) << bad;
     EXPECT_NE(m.find("agent 0's cell at t=1 must be written (x,y)"), std::string::npos) << bad << ": " << m;
@@ -92,6 +103,8 @@ TEST(PlanFile, WriteRefusesWhatCouldntBeReadBack) {
   const Grid g(2, 2);
   EXPECT_THROW(write_plan(Plan{{0, 1}, {}}, g), std::invalid_argument);
   EXPECT_THROW(write_plan(Plan{{0, 4}}, g), std::invalid_argument);
+  EXPECT_THROW(write_plan(Plan(5, Path{0}), g), std::invalid_argument);  // more paths than cells
+  EXPECT_EQ(parse_plan(write_plan(Plan(4, Path{0}), g), g), Plan(4, Path{0}));
 }
 
 TEST(PlanFile, RandomPlansRoundTrip) {
@@ -99,7 +112,7 @@ TEST(PlanFile, RandomPlansRoundTrip) {
   for (int round = 0; round < 200; ++round) {
     const Grid g = random_map(static_cast<std::int32_t>(1 + rng.below(30)), static_cast<std::int32_t>(1 + rng.below(30)),
                               0.0, rng.next());
-    Plan plan(rng.below(8));
+    Plan plan(rng.below(std::min<std::uint64_t>(8, g.cell_count() + 1)));  // at most one path per cell
     for (auto& path : plan) {
       const auto length = 1 + rng.below(10);
       for (std::uint64_t t = 0; t < length; ++t) {

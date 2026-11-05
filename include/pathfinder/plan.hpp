@@ -68,8 +68,9 @@ struct PlanCheck {
 // business. Throws ParseError (from load_plan, with the file name), or std::runtime_error if the file can't be read.
 Plan parse_plan(std::string_view text, const Grid& grid);
 Plan load_plan(const std::filesystem::path& path, const Grid& grid);
-// "version 1", "agents k", then each agent's number and cells. Throws std::invalid_argument for an empty path or a
-// cell id outside the grid (neither could be read back). parse_plan(write_plan(p, g), g) == p.
+// "version 1", "agents k", then each agent's number and cells. Throws std::invalid_argument for an empty path, a
+// cell id outside the grid, or more paths than the grid has cells (none could be read back).
+// parse_plan(write_plan(p, g), g) == p.
 std::string write_plan(const Plan& plan, const Grid& grid);
 
 // Checks a plan against an instance by DESIGN.md's rules, reporting everything it finds. Conflicts are looked for

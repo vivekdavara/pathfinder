@@ -146,7 +146,8 @@ agents 3
 2 (0,0)
 ```
 
-- `version 1`, then `agents k`, then exactly k lines, the i-th beginning with the agent number i (in order, each
+- `version 1`, then `agents k` (k at most the grid's number of cells: no instance on it has more agents), then
+  exactly k lines, the i-th beginning with the agent number i (in order, each
   once) followed by that agent's cells at t = 0, 1, ..., each written `(x,y)` with no spaces inside, separated by
   spaces or tabs. At least one cell per agent. Blank lines after the last agent are ignored; anything else is an
   error, and errors name their line, as for maps.
@@ -154,7 +155,9 @@ agents 3
   would wrap onto another row). Whether the plan is *valid* is `validate`'s business, not the parser's: a plan file
   may hold an illegal or conflicting plan, so that the validator can say what's wrong with it.
 - `pathfinder validate MAP SCEN PLAN` builds the instance of the scenario's first k entries (k from the plan) and
-  prints the SOC and makespan of a valid plan, or each problem; it exits 0 for a valid plan, 1 for an invalid one.
+  prints the SOC and makespan of a valid plan, or the number of problems and the first 20 of them. It exits 0 for a
+  valid plan; 1 for an invalid plan, or when those k entries don't make a valid instance; 2 when a file can't be
+  read or parsed, or the plan has more agents than the scenario has entries.
 
 ## The planners (days 2 and 3)
 

@@ -1,6 +1,6 @@
 // pathfinder: the command-line tool over the library. Exit status 0 when all is well, 1 when `check` finds a
-// problem with the instance or `validate` with the plan, 2 for a usage error, a file that can't be read or parsed, or
-// output that can't be written.
+// problem with the instance or `validate` one with the plan or its instance, 2 for a usage error, a file that can't
+// be read or parsed, or output that can't be written.
 
 #include <charconv>
 #include <cmath>

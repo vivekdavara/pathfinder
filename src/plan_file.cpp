@@ -1,5 +1,6 @@
 // The plan file format (DESIGN.md "Plan files").
 
+#include <algorithm>
 #include <stdexcept>
 #include <string>
 
@@ -16,8 +17,8 @@ using text::fields;
 using text::Lines;
 using text::shown;
 
-// More agents than any map here could hold; a bound so that a damaged count can't reserve gigabytes.
-constexpr std::int64_t kMaxAgents = 1'000'000;
+// What parse_plan reserves before it has seen the agents' lines, so a damaged count can't allocate gigabytes.
+constexpr std::size_t kReserveAtMost = 1 << 16;
 
 // "(x,y)" with x and y digits only, inside the grid.
 CellId cell(std::string_view token, const Grid& grid, std::size_t agent, std::size_t t, int line) {
@@ -50,13 +51,16 @@ Plan parse_plan(std::string_view text, const Grid& grid) {
   }
   const auto header = fields(line);
   const auto count = header.size() == 2 && header[0] == "agents" ? digits(header[1]) : std::nullopt;
-  if (!count || *count > kMaxAgents) {
-    throw ParseError(2, "expected 'agents <k>' with k at most " + std::to_string(kMaxAgents) + ", got '" +
-                            shown(line) + "'");
+  // At most one agent per cell: no instance on this grid has more (starts are distinct), and write_plan refuses the
+  // same. (A fixed bound of a million, the first version, refused plans write_plan had written: the day-1 second
+  // review.)
+  if (!count || static_cast<std::size_t>(*count) > grid.cell_count()) {
+    throw ParseError(2, "expected 'agents <k>' with k at most the grid's " + std::to_string(grid.cell_count()) +
+                            " cells, got '" + shown(line) + "'");
   }
   const auto k = static_cast<std::size_t>(*count);
   Plan plan;
-  plan.reserve(k);
+  plan.reserve(std::min(k, kReserveAtMost));
   for (std::size_t i = 0; i < k; ++i) {
     if (!lines.next(line)) {
       throw ParseError(lines.number() + 1,
@@ -97,6 +101,10 @@ Plan load_plan(const std::filesystem::path& path, const Grid& grid) {
 }
 
 std::string write_plan(const Plan& plan, const Grid& grid) {
+  if (plan.size() > grid.cell_count()) {
+    throw std::invalid_argument("the plan has " + std::to_string(plan.size()) + " paths, more than the grid's " +
+                                std::to_string(grid.cell_count()) + " cells; a plan file can't hold it");
+  }
   std::string out = "version 1\nagents " + std::to_string(plan.size()) + "\n";
   for (std::size_t i = 0; i < plan.size(); ++i) {
     if (plan[i].empty()) {
