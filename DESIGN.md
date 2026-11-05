@@ -1,0 +1,231 @@
+# Pathfinder: design
+
+Pathfinder plans collision-free paths for many robots on a grid warehouse map at once (multi-agent path finding,
+MAPF). It is the kind of planning a fleet of warehouse robots needs: every robot has a start and a goal, they all
+move at the same time on the same grid, and no two may ever be in the same cell or swap cells in one step. This
+document is the specification: what a valid plan is, which files it reads, and how the planners (days 2 and 3) and
+the measurements (day 4) work. Where the code and this document disagree, one of them has a bug.
+
+## The model
+
+- **The grid.** A rectangle of cells, each passable or blocked, 1 to 10,000 on a side. A cell is written (x, y): x is
+  the column (0 at the left) and y the row (0 at the top), as in the MovingAI files. In code a cell is a `CellId`,
+  `y * width + x`. Cells outside the grid are blocked.
+- **Time** is discrete: t = 0, 1, 2, ... Every agent acts at every step.
+- **Actions.** In one step an agent either waits in its cell or moves to one of its four neighbours (north, east,
+  south, west); the target must be passable. Every action costs 1, waiting included. No diagonal moves.
+- **An instance** is a grid and k agents, each with a start and a goal cell. Starts are pairwise distinct, goals are
+  pairwise distinct, and all are passable. (An agent's start may be another agent's goal.)
+- **A path** for an agent is the list of its cells at t = 0, 1, ..., T. It begins at the agent's start, ends at its
+  goal, and each consecutive pair is a wait or a move. **After its path ends, an agent stays at its goal for ever**
+  (it doesn't disappear): later agents must route around it, and its own path can't end at the goal while another
+  agent still has to pass through that cell.
+- **A plan** is one path per agent. It is **valid** when every path is legal and no two agents conflict:
+  - **vertex conflict**: agents a and b are in the same cell at the same time t (counting an agent that has finished
+    as sitting on its goal);
+  - **edge conflict** (swap): a moves u → v while b moves v → u between t and t + 1.
+
+  Following is allowed (a moves into the cell b leaves in the same step), and so are rotations of three or more
+  agents around a cycle; only head-on swaps are forbidden. This is the standard definition used by the MAPF benchmark
+  suite (Stern et al., "Multi-Agent Pathfinding: Definitions, Variants, and Benchmarks", SoCS 2019).
+- **Cost.** An agent's cost is the time it reaches its goal for the last time: the smallest t with the agent at its
+  goal at every step from t on. Waits at the goal after that are free; waits anywhere else, or leaving the goal and
+  coming back, are not. A plan's **sum of costs (SOC)** is the sum over agents; its **makespan** is the largest. The
+  planners minimise SOC (CBS optimally, prioritized planning heuristically); makespan is reported alongside.
+
+## Maps and scenarios: the MovingAI formats
+
+Maps and scenarios come from the MovingAI benchmark sets (movingai.com/benchmarks/mapf), which every MAPF paper
+uses, so results here can be compared with published ones. They aren't committed (they're not ours to redistribute):
+`scripts/fetch_maps.py` downloads them, checks each archive's SHA-256 and unpacks them into `data/`. CI uses small
+maps the generators below make, plus a few small hand-written files in `tests/data/`.
+
+### Map files (`.map`)
+
+```
+type octile
+height 4
+width 6
+map
+......
+.@@...
+.@@.T.
+......
+```
+
+- Header: `type`, `height` and `width`, each once, then the line `map`. `type` must be `octile` (the only type in
+  the benchmark sets; it names the 8-connected movement of the original pathfinding benchmarks, but MAPF uses the
+  maps 4-connected, and so does Pathfinder). Height and width are decimal integers 1..10,000, digits only.
+- Then exactly `height` rows of exactly `width` characters. Passable: `.` (ground), `G` (ground) and `S` (swamp,
+  "passable from regular terrain" in MovingAI's legend). Blocked: `@` and `O` (out of bounds), `T` (trees) and `W`
+  (water, which MovingAI makes passable only from water; Pathfinder has no terrain modes, so it is blocked). Any
+  other character is an error.
+- Lines may end in `\n` or `\r\n`. Blank lines after the last row are ignored; anything else after it is an error.
+- Errors name the line number and say what was expected. Parsing never guesses: a short row, a missing header field
+  or an unknown character is an error, not a padded or skipped row.
+- Writing produces the canonical form (`\n` line ends, `.` for passable and `@` for blocked), and parsing that gives
+  back the same grid.
+
+### Scenario files (`.scen`)
+
+```
+version 1
+0	maze-32-32-2.map	32	32	11	29	14	30	4
+```
+
+- The first line is `version 1` (or `version 1.0`). Each following non-blank line has nine fields separated by tabs
+  or spaces: bucket, map file name, map width, map height, start x, start y, goal x, goal y, optimal length.
+- Integers are decimal digits only; the optimal length is a decimal number (the older octile sets write lengths like
+  `5.82842712`). Coordinates must lie inside the stated width and height.
+- **An instance with k agents is the scenario's first k entries**, as in the MAPF literature (each benchmark
+  scenario lists 1,000 or so start-goal pairs; papers report "the first k agents of scenario random-1").
+- Building an instance checks the scenario against its map: the width and height match, every start and goal is
+  passable, starts are distinct and goals are distinct. Whether each goal is reachable from its start is reported
+  separately (an unreachable goal makes the instance unsolvable, which a planner must say, not loop on).
+
+## Generated maps and scenarios
+
+For CI and for experiments with controlled parameters, the library makes maps and scenarios itself, deterministically
+from a seed: the same seed gives the same file on every platform and compiler (pinned by hashes in the tests).
+
+- **Random numbers**: SplitMix64 with its own unbiased bounded draw (rejection of the biased low range), not
+  `<random>`'s distributions, which differ between libstdc++ and libc++.
+- **`empty(w, h)`**: every cell passable.
+- **`random(w, h, obstacle percentage, seed)`**: exactly round(w · h · p / 100) blocked cells, chosen uniformly
+  (a partial Fisher-Yates shuffle of the cells). The free cells may fall into several connected pieces; scenarios are
+  drawn from the largest.
+- **`warehouse(...)`**: rectangular shelf blocks in a regular array, separated by aisles, inside a free border. With
+  `shelf_rows` × `shelf_columns` blocks of `shelf_width` × `shelf_height` cells, aisles `aisle` cells wide and a border
+  `margin` cells wide, the map is `2·margin + shelf_columns·shelf_width + (shelf_columns − 1)·aisle` wide and
+  `2·margin + shelf_rows·shelf_height + (shelf_rows − 1)·aisle` high. With aisle ≥ 1 and margin ≥ 1 every free cell
+  is connected to every other (a test checks it). This is the layout of the MovingAI `warehouse-*` maps and of
+  robotic fulfilment floors: narrow aisles where robots must queue or detour, and open space at the edges.
+- **`random_scenario(grid, k, seed)`**: k agents with distinct starts and distinct goals, all drawn uniformly from the
+  grid's largest connected component, each agent's goal different from its own start. Its optimal length column is
+  the true 4-connected distance (BFS), and its bucket is that distance divided by 4, rounded down.
+
+## Checking a plan
+
+`validate(instance, plan)` is the oracle every planner is tested against; it shares no code with them beyond the grid.
+It is deliberately simple (a per-time-step occupancy map, O(k · T) for k agents and makespan T) and reports
+everything it finds, in a fixed order, rather than stopping at the first problem:
+
+1. the plan has one path per agent (else nothing else is checked);
+2. no path is empty; each starts at its agent's start and ends at its goal;
+3. every cell on a path is inside the grid and passable, and every step is a wait or a move to a 4-neighbour;
+4. vertex conflicts, with finished agents sitting on their goals until the last path ends;
+5. edge (swap) conflicts.
+
+It also computes each path's cost, the SOC and the makespan, by the definitions above.
+
+## The planners (days 2 and 3)
+
+All planners take an instance and limits (wall time, expanded nodes) and return a plan, or say why there is none:
+an agent's goal is unreachable, the planner gave up within its limits, or (prioritized planning only) an agent
+found no path around the ones planned before it.
+
+- **Heuristic**: for each agent, the BFS distance to its goal from every cell, ignoring other agents. It is exact on
+  the empty problem, so it is admissible and consistent for the space-time searches below.
+- **Space-time A\*** (day 2): A\* over states (cell, t), whose successors are the five actions, with f = t + h(cell).
+  A **reservation table** holds what the search must avoid: (cell, t) vertex reservations, (u → v, t) edge
+  reservations, and "from t on" reservations of cells where an earlier agent rests at its goal. Its goal test is
+  "at the goal at a time after which no reservation covers the goal", so a path never ends on a cell another agent
+  must still cross. The search space is finite: past the last timed reservation the problem is static, so a bound of
+  (last reservation time + passable cells) on t is enough, and a search that reaches it reports no path. Ties on f
+  are broken towards larger t (deeper nodes), then by insertion order, so runs are deterministic.
+- **Prioritized planning** (day 2, the baseline): agents in a fixed order (the scenario's order by default) are
+  planned one at a time with space-time A\*, each reserving its whole path, and its goal from its arrival on. Fast,
+  but neither complete (an early agent can wall in a later one) nor optimal.
+- **Conflict-based search, CBS** (day 3, Sharon et al., "Conflict-based search for optimal multi-agent pathfinding",
+  AIJ 2015): a best-first search over a **constraint tree**. A node holds a set of constraints, one path per agent
+  that satisfies its own agent's constraints (found by space-time A\* with the constraints as its table), and the SOC.
+  The root has no constraints. The search pops the node of lowest SOC (ties: fewer conflicts, then creation order),
+  finds one conflict in its plan, and splits it into two children, each forbidding the conflict to one of the two
+  agents:
+  - vertex conflict (a, b, v, t): child 1 forbids a from v at t, child 2 forbids b from v at t;
+  - edge conflict (a, b, u → v, t): child 1 forbids a the move u → v at t, child 2 forbids b the move v → u at t.
+
+  Only the constrained agent is replanned in each child. A node with no conflicts is a valid plan, and because every
+  valid plan satisfies the constraints of at least one child at every split, the first one popped has minimum SOC.
+  A vertex constraint on an agent's goal at time t means its path can't end there before t + 1, which is the goal
+  test above. On an unsolvable instance whose goals are all reachable (two agents that must swap in a dead-end
+  corridor) CBS can keep splitting for ever, so the node and time limits are part of its contract, not an
+  afterthought.
+- Later refinements, if time allows: choosing cardinal conflicts first, and a bypass. Each would be measured
+  against plain CBS, not assumed to help.
+
+## Python and the simulator (day 4)
+
+A pybind11 module (`pathfinder._core`, re-exported by the `pathfinder` package) exposes the grid, the file formats,
+the generators, the validator and the planners. The experiments are Python scripts on top of it, and a step-by-step
+simulator executes a plan one time step at a time, checking each step (so it can also replay a plan with a robot
+delayed, to show what a plan's lack of slack costs).
+
+## Measurements (day 4)
+
+On generated warehouse and random maps and on MovingAI maps (with their own scenarios): success rate within a time
+limit against the number of agents, runtime, and SOC of CBS against prioritized planning on the instances both
+solve. Every number in the README comes with the command that produced it and the machine it ran on.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph files["Inputs"]
+    MAP[".map file"]
+    SCEN[".scen file"]
+    GEN["generators<br/>(empty, random, warehouse,<br/>random scenario)"]
+  end
+  subgraph core["C++ library (pathfinder)"]
+    GRID["Grid"]
+    INST["Instance<br/>(first k agents)"]
+    H["BFS distances<br/>(heuristic)"]
+    STA["space-time A*<br/>+ reservation table"]
+    PP["prioritized planning"]
+    CBS["CBS<br/>(constraint tree)"]
+    VAL["validate<br/>(the oracle)"]
+  end
+  subgraph outside["Front ends"]
+    CLI["pathfinder CLI"]
+    PY["Python module<br/>(pybind11)"]
+    EXP["experiments,<br/>simulator, visualizer"]
+  end
+  MAP --> GRID
+  GEN --> GRID
+  SCEN --> INST
+  GEN --> INST
+  GRID --> INST
+  INST --> H --> STA
+  STA --> PP
+  STA --> CBS
+  PP --> VAL
+  CBS --> VAL
+  core --> CLI
+  core --> PY --> EXP
+```
+
+Days 2 to 5 fill in the planners, the simulator and the visualizer; day 1 builds the grid, the file formats, the
+generators, the validator, the CLI and the Python module, so the planners have their inputs and their oracle from
+the start.
+
+## Testing
+
+- Each format has hand-written good and bad files: every error names its line, and write-then-parse gives back the
+  same grid or scenario.
+- Every MovingAI MAPF map and scenario parses (when `data/` has been fetched; CI skips that test and says so).
+- The generators are pinned by hashes of their output, so a change in the random stream or the layout shows up as a
+  failing test on every platform at once.
+- The validator has a test for each rule, with a small plan that breaks only that rule, and one for each kind of
+  plan it must accept (following, rotations, finishing early and waiting).
+- From day 2: every planner's every plan goes through the validator; CBS's SOC is compared with a brute-force
+  search on tiny instances, and never above prioritized planning's.
+
+## Day plan
+
+| Day | Delivers |
+|---|---|
+| 1 | this document, the CMake and pybind11 scaffold, the grid, the MovingAI map and scenario formats, the generators, BFS, the validator, the CLI, the map fetch script, CI |
+| 2 | space-time A\* with a reservation table, prioritized planning, tests |
+| 3 | CBS, tests that no plan has a vertex or edge conflict, CBS against a brute-force optimum on tiny instances |
+| 4 | benchmarks (success rate against agents, runtime, SOC against prioritized planning), the step-by-step simulator in Python |
+| 5 | a replay visualizer, README results, WALKTHROUGH.md, v1.0.0 |
