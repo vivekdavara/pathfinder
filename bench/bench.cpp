@@ -6,12 +6,14 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "pathfinder/distance.hpp"
 #include "pathfinder/generate.hpp"
 #include "pathfinder/instance.hpp"
 #include "pathfinder/movingai.hpp"
 #include "pathfinder/plan.hpp"
+#include "pathfinder/rng.hpp"
 
 namespace pathfinder {
 namespace {
@@ -52,6 +54,43 @@ void BM_OctileDistances(benchmark::State& state) {
   state.SetItemsProcessed(state.iterations() * static_cast<std::int64_t>(sq.grid.cell_count()));
 }
 BENCHMARK(BM_OctileDistances)->Arg(32)->Arg(128)->Arg(512)->Arg(1024)->Unit(benchmark::kMicrosecond);
+
+// One start-goal distance, as random_scenario and `pathfinder check` need it: the full search over the map against
+// the single-pair search that stops at the goal, over the same 64 random goals in the largest piece.
+std::vector<CellId> goals_in(const Square& sq) {
+  const Components c = components(sq.grid);
+  SplitMix64 rng(7);
+  std::vector<CellId> out;
+  while (out.size() < 64) {
+    const auto cell = static_cast<CellId>(rng.below(sq.grid.cell_count()));
+    if (c.label[cell] == c.largest) {
+      out.push_back(cell);
+    }
+  }
+  return out;
+}
+
+void BM_OctilePairByFullSearch(benchmark::State& state) {
+  const Square sq = square(state.range(0));
+  const auto goals = goals_in(sq);
+  std::size_t i = 0;
+  for (auto _ : state) {
+    double d = octile_distances(sq.grid, sq.source)[goals[i++ % goals.size()]];
+    benchmark::DoNotOptimize(d);
+  }
+}
+BENCHMARK(BM_OctilePairByFullSearch)->Arg(128)->Arg(512)->Unit(benchmark::kMicrosecond);
+
+void BM_OctilePairBySinglePairSearch(benchmark::State& state) {
+  const Square sq = square(state.range(0));
+  const auto goals = goals_in(sq);
+  std::size_t i = 0;
+  for (auto _ : state) {
+    double d = octile_distance(sq.grid, sq.source, goals[i++ % goals.size()]);
+    benchmark::DoNotOptimize(d);
+  }
+}
+BENCHMARK(BM_OctilePairBySinglePairSearch)->Arg(128)->Arg(512)->Unit(benchmark::kMicrosecond);
 
 void BM_ParseMap(benchmark::State& state) {
   const std::string text = write_map(square(state.range(0)).grid);
