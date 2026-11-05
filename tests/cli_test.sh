@@ -125,6 +125,10 @@ expect 2 "$cli" gen-map empty 3x 3
 expect 2 "$cli" gen-map random 8 8 101 1
 has "$tmp/err" "0..100"
 expect 2 "$cli" gen-map random 8 8 nan 1
+expect 2 "$cli" gen-map random 8 8 1e1 1
+expect 2 "$cli" gen-map random 8 8 0x10 1
+expect 2 "$cli" gen-map random 8 8 " 5" 1
+expect 0 "$cli" gen-map random 8 8 12.5 1
 expect 2 "$cli" gen-map warehouse 1 1 1 1 0 1
 expect 2 "$cli" info "$data/short_row.map"
 is_line "$tmp/err" "pathfinder: $data/short_row.map: line 6: row 1 has 2 characters, expected 3"

@@ -19,6 +19,7 @@
 #include "pathfinder/instance.hpp"
 #include "pathfinder/movingai.hpp"
 #include "pathfinder/plan.hpp"
+#include "text.hpp"
 
 namespace pf = pathfinder;
 
@@ -59,13 +60,14 @@ Int whole(std::string_view what, std::string_view s) {
   return value;
 }
 
+// The same strict format as the scenario files' lengths: digits, optionally a '.' and more digits.
 double decimal(std::string_view what, std::string_view s) {
-  double value = 0.0;
-  const auto [end, ec] = std::from_chars(s.data(), s.data() + s.size(), value, std::chars_format::fixed);
-  if (s.empty() || ec != std::errc{} || end != s.data() + s.size()) {
-    throw UsageError(std::string(what) + " must be a decimal number, got '" + std::string(s) + "'");
+  const auto value = pf::text::decimal(s);
+  if (!value) {
+    throw UsageError(std::string(what) + " must be a decimal number (digits, optionally a '.' and digits), got '" +
+                     std::string(s) + "'");
   }
-  return value;
+  return *value;
 }
 
 void need(const std::vector<std::string_view>& args, std::size_t min, std::size_t max) {

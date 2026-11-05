@@ -12,6 +12,18 @@
 #include <system_error>
 #include <vector>
 
+// Floating-point std::from_chars arrived in libc++ 20 (libstdc++ has had it since GCC 11). The libc++ of Xcode 16,
+// which GitHub's macos-15 runner has, lacks it, so there decimal() below uses strtod_l in the C locale instead, which
+// also rounds correctly. PATHFINDER_FORCE_STRTOD selects that path anywhere, to test it.
+#if (defined(_LIBCPP_VERSION) && _LIBCPP_VERSION < 200000) || defined(PATHFINDER_FORCE_STRTOD)
+#define PATHFINDER_STRTOD_DOUBLE 1
+#include <clocale>
+#include <cstdlib>
+#if defined(__APPLE__)
+#include <xlocale.h>
+#endif
+#endif
+
 namespace pathfinder::text {
 
 // Splits text into lines on '\n', dropping one '\r' before it, and counts them from 1. A final line without a
@@ -123,6 +135,43 @@ inline std::optional<std::int64_t> digits(std::string_view s) {
     return std::nullopt;
   }
   return value;
+}
+
+// A decimal number written as digits, optionally a '.' and more digits (no sign, exponent, spaces, "inf" or "nan"),
+// as the nearest double; nullopt if s isn't one. The format is checked here first, so both conversion paths accept
+// exactly the same strings.
+inline std::optional<double> decimal(std::string_view s) {
+  const auto dot = s.find('.');
+  const auto whole = s.substr(0, dot);
+  const auto frac = dot == std::string_view::npos ? std::string_view{} : s.substr(dot + 1);
+  const auto all_digits = [](std::string_view part) {
+    for (const char c : part) {
+      if (c < '0' || c > '9') {
+        return false;
+      }
+    }
+    return true;
+  };
+  if (whole.empty() || !all_digits(whole) || (dot != std::string_view::npos && (frac.empty() || !all_digits(frac)))) {
+    return std::nullopt;
+  }
+#if defined(PATHFINDER_STRTOD_DOUBLE)
+  static const locale_t c_locale = newlocale(LC_ALL_MASK, "C", nullptr);
+  const std::string text(s);
+  char* end = nullptr;
+  const double value = strtod_l(text.c_str(), &end, c_locale);
+  if (end != text.c_str() + text.size()) {
+    return std::nullopt;
+  }
+  return value;
+#else
+  double value = 0.0;
+  const auto [end, ec] = std::from_chars(s.data(), s.data() + s.size(), value, std::chars_format::fixed);
+  if (ec != std::errc{} || end != s.data() + s.size()) {
+    return std::nullopt;
+  }
+  return value;
+#endif
 }
 
 }  // namespace pathfinder::text

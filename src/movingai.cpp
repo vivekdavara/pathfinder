@@ -33,25 +33,10 @@ std::int32_t dimension(std::string_view what, std::string_view s, int line) {
   return static_cast<std::int32_t>(*value);
 }
 
-// An optimal length: digits, optionally a '.' and more digits; at most kMaxOptimalLength.
+// An optimal length: a plain decimal (text::decimal) of at most kMaxOptimalLength.
 std::optional<double> length(std::string_view s) {
-  const auto dot = s.find('.');
-  const auto whole = s.substr(0, dot);
-  const auto frac = dot == std::string_view::npos ? std::string_view{} : s.substr(dot + 1);
-  const auto all_digits = [](std::string_view part) {
-    for (const char c : part) {
-      if (c < '0' || c > '9') {
-        return false;
-      }
-    }
-    return true;
-  };
-  if (whole.empty() || !all_digits(whole) || (dot != std::string_view::npos && (frac.empty() || !all_digits(frac)))) {
-    return std::nullopt;
-  }
-  double value = 0.0;
-  const auto [end, ec] = std::from_chars(s.data(), s.data() + s.size(), value, std::chars_format::fixed);
-  if (ec != std::errc{} || end != s.data() + s.size() || !(value <= kMaxOptimalLength)) {
+  const auto value = text::decimal(s);
+  if (!value || !(*value <= kMaxOptimalLength)) {
     return std::nullopt;
   }
   return value;

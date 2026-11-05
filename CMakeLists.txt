@@ -44,6 +44,7 @@ pathfinder_set_warnings(pathfinder)
 add_executable(pathfinder_cli tools/pathfinder_cli.cpp)
 set_target_properties(pathfinder_cli PROPERTIES OUTPUT_NAME pathfinder)
 target_link_libraries(pathfinder_cli PRIVATE pathfinder::pathfinder)
+target_include_directories(pathfinder_cli PRIVATE ${PROJECT_SOURCE_DIR}/src)  # src/text.hpp, the format helpers
 pathfinder_set_warnings(pathfinder_cli)
 
 if(PATHFINDER_BUILD_TESTS OR PATHFINDER_BUILD_PYTHON OR PATHFINDER_BUILD_BENCHMARKS)
