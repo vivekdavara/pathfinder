@@ -1,0 +1,2 @@
+# Python tools for the tests and experiments (the C++ build fetches its own dependencies).
+pytest==9.1.1
