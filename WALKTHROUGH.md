@@ -101,8 +101,50 @@ checks size, blocked-cell count and one component on several layouts.
 
 **How are start-goal pairs drawn?**
 From the largest connected piece only (so every goal is reachable), by partial Fisher-Yates shuffles: one for the
-starts, one for the goals, redrawing a goal that equals the agent's own start. With fewer agents than cells, at least
-two cells remain at every step, so the redraw always ends; `RandomScenario.CanFillAllButOneCell` tests the edge.
+starts, one for the goals, and the whole goal draw repeated whenever any agent's goal is its own start. That is plain
+rejection sampling, so every valid configuration is equally likely, and a draw is accepted with probability at least
+about 1/e, so it takes under 3 draws on average.
+
+**Why not just redraw the one goal that clashed?**
+That was my first version, and the review showed it's biased: the number of choices left for agent i depends on
+whether an earlier goal took agent i's start. On a 3-cell row with 2 agents, the 18 valid configurations came up
+about 750 or 1,500 times each in 18,000 seeds instead of 1,000 (`ReviewGenerate.RandomScenarioConfigurationsAreUniform`
+in `tests/review/`). Each goal's own distribution looked fine, which is why my per-cell test didn't see it: the bias
+was in the joint distribution.
+
+## Plan files
+
+**Why a plan format of your own?**
+MovingAI defines maps and scenarios but no format for solutions, and the planners (day 2) need to write plans that
+the CLI can check and the visualizer (day 5) can replay: `version 1`, `agents k`, then one line per agent with its
+cells at t = 0, 1, ... as `(x,y)` (DESIGN.md "Plan files", `src/plan_file.cpp`). `pathfinder validate MAP SCEN PLAN`
+prints a valid plan's SOC and makespan, or every problem.
+
+**Why does the parser need the grid?**
+To turn (x, y) into cell ids, and to refuse a cell outside the grid: as an id, (4, 0) on a 4-wide grid would silently
+become (0, 1). The parser checks only the format, though; a file may hold a conflicting plan, because describing
+what's wrong with it is the validator's job.
+
+## The review
+
+**How was day 1 reviewed?**
+By an agent in its own git worktree, asked for correctness bugs and to prove each with a failing test before
+reporting it, then a second round on the fixes. The first round found 11 (README "Review of day 1"); none was in
+`validate`, which it also compared with its own Python model of DESIGN.md's rules on 20,000 random instances with
+no mismatch. Its tests live in `tests/review/` and `tests/python/review/`, so each fix is pinned.
+
+**Which finding taught you the most?**
+`make_instance` trusting coordinates: the parser checked them, so I'd assumed every scenario was checked, but a
+scenario built in code (or from Python) never meets the parser, and `y * width + x` wraps a point off the right edge
+onto the next row without any error. Checks belong at the boundary where the data enters, and an instance has more
+than one way in.
+
+**Tell me about a bug in your own test tooling.**
+Two. My first test of the bounded draw's bias used n = 2^63 + 1 and expected about half the draws above 2^63 - 1;
+but only two values lie there, so it failed on correct code. The right example is n = 3 · 2^62, where a plain modulo
+puts half the draws in the bottom third instead of a third, and the test now fails on a mutant with a plain modulo.
+And the parser robustness test chose between duplicating and dropping a line with a fresh random number instead of
+the case it was in, so it duplicated 1 time in 6 instead of half the time.
 
 ## Engineering
 
