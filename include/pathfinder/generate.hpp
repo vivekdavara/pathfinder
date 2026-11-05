@@ -40,8 +40,8 @@ Grid warehouse_map(const WarehouseLayout& layout);
 // distinct and uniform, goals pairwise distinct and uniform, and each agent's goal different from its own start.
 // Each entry names `map_name` and the grid's size; as in MovingAI's files, its optimal length is the octile
 // distance (octile_distances) and its bucket that length / 4, rounded down. Throws std::invalid_argument unless
-// agents < the largest piece's size (so a goal other than the agent's own start always remains), or if map_name
-// couldn't be written to a .scen file.
+// agents < the largest piece's size (so a goal other than the agent's own start always remains), or unless
+// valid_map_name(map_name).
 Scenario random_scenario(const Grid& grid, std::size_t agents, std::uint64_t seed, const std::string& map_name);
 
 }  // namespace pathfinder

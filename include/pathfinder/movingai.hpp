@@ -53,6 +53,11 @@ struct Scenario {
   friend bool operator==(const Scenario&, const Scenario&) = default;
 };
 
+// Whether a scenario may name this map: at least one character, and no spaces, tabs or other control characters
+// (bytes 0x00-0x20 and 0x7f), so that it is exactly one field of a line. The parser, the writer and the generator
+// all use this rule.
+bool valid_map_name(std::string_view name);
+
 // Parses a .scen file's text (version 1). Throws ParseError.
 Scenario parse_scenario(std::string_view text);
 // Reads and parses a .scen file. Throws ParseError (with the file name) or std::runtime_error if it can't be read.

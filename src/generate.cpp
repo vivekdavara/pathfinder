@@ -63,8 +63,8 @@ Grid warehouse_map(const WarehouseLayout& layout) {
 }
 
 Scenario random_scenario(const Grid& grid, std::size_t agents, std::uint64_t seed, const std::string& map_name) {
-  if (map_name.empty() || map_name.find_first_of(" \t\r\n") != std::string::npos) {
-    throw std::invalid_argument("the map name must be non-empty with no spaces, tabs or line breaks");
+  if (!valid_map_name(map_name)) {
+    throw std::invalid_argument("the map name must be non-empty with no spaces, tabs or control characters");
   }
   const Components pieces = components(grid);
   const std::size_t size = pieces.largest == Components::kNone ? 0 : pieces.sizes[pieces.largest];

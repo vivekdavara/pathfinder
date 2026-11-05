@@ -76,7 +76,8 @@ version 1
 - The first line is `version 1` (or `version 1.0`). Each following non-blank line has nine fields separated by tabs
   or spaces: bucket, map file name, map width, map height, start x, start y, goal x, goal y, optimal length.
 - Integers are decimal digits only; the optimal length is a plain decimal number (no sign or exponent).
-  Coordinates must lie inside the stated width and height.
+  Coordinates must lie inside the stated width and height. The map name is one field: no spaces, tabs or other
+  control characters (a `\r` inside a line is not a line end, so it would otherwise end up in the name).
 - **The optimal length is the octile distance**, not the 4-connected one: the shortest path with 8-connected moves,
   diagonals costing √2 and never cutting a corner (a diagonal needs both cells it passes between to be free), rounded
   to 8 decimals. This holds for the MAPF scenarios too, although MAPF agents move 4-connected: in

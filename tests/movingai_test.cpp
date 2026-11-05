@@ -198,6 +198,22 @@ TEST(ScenarioFormat, EachErrorNamesItsLine) {
   EXPECT_EQ(scen_error(v + "0\tm.map\t2\t2\t0\t0\t1\t5\t2\n", &m), 2);
   EXPECT_NE(m.find("goal y 5 is outside the map's height 2"), std::string::npos) << m;
   EXPECT_EQ(scen_error(v + "0\tm.map\t2\t2\t0\t-0\t1\t1\t2\n"), 2);
+  // A '\r' inside a line isn't a line end, and it can't be part of a map name (found by the robustness test: the
+  // parser accepted it, then the writer refused to write the scenario back).
+  EXPECT_EQ(scen_error(v + "0\tm\r.map\t2\t2\t0\t0\t1\t1\t2\n", &m), 2);
+  EXPECT_NE(m.find("the map name 'm\\x0d.map' has a control character"), std::string::npos) << m;
+  EXPECT_EQ(scen_error(v + std::string("0\tm\0.map\t2\t2\t0\t0\t1\t1\t2\n", 23)), 2);
+  EXPECT_EQ(scen_error(v + "0\tm\x7f.map\t2\t2\t0\t0\t1\t1\t2\n"), 2);
+  EXPECT_EQ(scen_error(v + "0\tcarte-\xc3\xa9t\xc3\xa9.map\t2\t2\t0\t0\t1\t1\t2\n"), -1);  // UTF-8 is fine
+}
+
+TEST(ScenarioFormat, MapNamesAreOneFieldWithoutControlCharacters) {
+  EXPECT_TRUE(valid_map_name("maze-32-32-2.map"));
+  EXPECT_TRUE(valid_map_name("a"));
+  EXPECT_FALSE(valid_map_name(""));
+  for (const char c : {' ', '\t', '\r', '\n', '\0', '\x1f', '\x7f'}) {
+    EXPECT_FALSE(valid_map_name(std::string("a") + c + "b")) << static_cast<int>(c);
+  }
 }
 
 TEST(ScenarioFormat, OptimalLengthsAreDecimalsWithoutSignsOrExponents) {
@@ -241,6 +257,8 @@ TEST(ScenarioFormat, WriteRefusesWhatParseWouldReject) {
   e.map = "my map.map";
   EXPECT_TRUE(refused(e));
   e.map = "";
+  EXPECT_TRUE(refused(e));
+  e.map = "a\rb.map";
   EXPECT_TRUE(refused(e));
   e = good;
   e.bucket = -1;

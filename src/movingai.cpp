@@ -281,6 +281,19 @@ std::string write_map(const Grid& grid) {
   return out;
 }
 
+bool valid_map_name(std::string_view name) {
+  if (name.empty()) {
+    return false;
+  }
+  for (const char c : name) {
+    const auto b = static_cast<unsigned char>(c);
+    if (b <= 0x20 || b == 0x7f) {
+      return false;
+    }
+  }
+  return true;
+}
+
 Scenario parse_scenario(std::string_view text) {
   Lines lines(text);
   std::string_view line;
@@ -311,6 +324,9 @@ Scenario parse_scenario(std::string_view text) {
       throw ParseError(n, "bucket must be a whole number, got '" + shown(f[0]) + "'");
     }
     e.bucket = static_cast<int>(*bucket);
+    if (!valid_map_name(f[1])) {
+      throw ParseError(n, "the map name '" + shown(f[1]) + "' has a control character");
+    }
     e.map = std::string(f[1]);
     e.width = dimension("width", f[2], n);
     e.height = dimension("height", f[3], n);
@@ -361,8 +377,8 @@ std::string write_scenario(const Scenario& scenario) {
     if (e.bucket < 0) {
       refuse("negative bucket");
     }
-    if (e.map.empty() || e.map.find_first_of(" \t\r\n") != std::string::npos) {
-      refuse("the map name must be non-empty with no spaces, tabs or line breaks");
+    if (!valid_map_name(e.map)) {
+      refuse("the map name must be non-empty with no spaces, tabs or control characters");
     }
     if (e.width < 1 || e.width > kMaxDimension || e.height < 1 || e.height > kMaxDimension) {
       refuse("width and height must be 1.." + std::to_string(kMaxDimension));
