@@ -27,16 +27,36 @@ namespace {
 
 std::string repr(Point p) { return "Point(" + std::to_string(p.x) + ", " + std::to_string(p.y) + ")"; }
 
-// The cell (x, y) if both Python ints name one inside the grid; nullopt for any other int, however large or
-// negative (a fixed-width parameter would make those a TypeError instead).
-std::optional<Point> inside(const Grid& g, const py::int_& x, const py::int_& y) {
-  const auto axis = [](const py::int_& v, std::int32_t size) -> std::optional<std::int32_t> {
-    int overflow = 0;
-    const long long value = PyLong_AsLongLongAndOverflow(v.ptr(), &overflow);
-    if (overflow != 0 || value < 0 || value >= size) {
+// A coordinate as a Python int: anything with __index__, as the fixed-width parameters elsewhere accept (an int, a
+// bool, numpy's integers), but not a float. A TypeError otherwise. (Taking py::int_ directly refused __index__
+// objects: the day-1 third review.)
+py::int_ as_index(const py::handle& v) {
+  PyObject* index = PyNumber_Index(v.ptr());
+  if (index == nullptr) {
+    throw py::error_already_set();
+  }
+  return py::reinterpret_steal<py::int_>(index);
+}
+
+// The value of a Python int if it fits a long long.
+std::optional<long long> small(const py::int_& v) {
+  int overflow = 0;
+  const long long value = PyLong_AsLongLongAndOverflow(v.ptr(), &overflow);
+  if (overflow != 0) {
+    return std::nullopt;
+  }
+  return value;
+}
+
+// The cell (x, y) if both name one inside the grid; nullopt for any other integer, however large or negative (a
+// fixed-width parameter would make those a TypeError instead).
+std::optional<Point> inside(const Grid& g, const py::handle& x, const py::handle& y) {
+  const auto axis = [](const py::handle& v, std::int32_t size) -> std::optional<std::int32_t> {
+    const auto value = small(as_index(v));
+    if (!value || *value < 0 || *value >= size) {
       return std::nullopt;
     }
-    return static_cast<std::int32_t>(value);
+    return static_cast<std::int32_t>(*value);
   };
   const auto column = axis(x, g.width());
   const auto row = axis(y, g.height());
@@ -46,12 +66,17 @@ std::optional<Point> inside(const Grid& g, const py::int_& x, const py::int_& y)
   return Point{*column, *row};
 }
 
-Point inside_or_throw(const Grid& g, const py::int_& x, const py::int_& y) {
+Point inside_or_throw(const Grid& g, const py::handle& x, const py::handle& y) {
   const auto p = inside(g, x, y);
   if (!p) {
-    throw py::index_error("(" + py::str(x).cast<std::string>() + ", " + py::str(y).cast<std::string>() +
-                          ") is outside the " + std::to_string(g.width()) + "x" + std::to_string(g.height()) +
-                          " grid");
+    // Not py::str(x): Python 3.11 refuses to print an int of over 4,300 digits, which would turn this IndexError into
+    // a ValueError (the day-1 third review).
+    const auto show = [](const py::handle& v) {
+      const auto value = small(as_index(v));
+      return value ? std::to_string(*value) : std::string("<a number too large to show>");
+    };
+    throw py::index_error("(" + show(x) + ", " + show(y) + ") is outside the " + std::to_string(g.width()) + "x" +
+                          std::to_string(g.height()) + " grid");
   }
   return *p;
 }
@@ -82,19 +107,19 @@ void bind_grid(py::module_& m) {
       .def_property_readonly("passable_count", &Grid::passable_count)
       .def(
           "passable",
-          [](const Grid& g, const py::int_& x, const py::int_& y) {
+          [](const Grid& g, const py::object& x, const py::object& y) {
             const auto p = inside(g, x, y);
             return p && g.passable(*p);
           },
-          "x"_a, "y"_a, "Whether (x, y) is passable; False outside the grid (any int).")
+          "x"_a, "y"_a, "Whether (x, y) is passable; False outside the grid (any integer, of any size).")
       .def(
           "set_passable",
-          [](Grid& g, const py::int_& x, const py::int_& y, bool passable) {
+          [](Grid& g, const py::object& x, const py::object& y, bool passable) {
             g.set_passable(inside_or_throw(g, x, y), passable);
           },
           "x"_a, "y"_a, "passable"_a, "IndexError outside the grid.")
       .def(
-          "id", [](const Grid& g, const py::int_& x, const py::int_& y) { return g.id(inside_or_throw(g, x, y)); },
+          "id", [](const Grid& g, const py::object& x, const py::object& y) { return g.id(inside_or_throw(g, x, y)); },
           "x"_a, "y"_a, "The cell id of (x, y): y * width + x; IndexError outside the grid.")
       .def(
           "point",
