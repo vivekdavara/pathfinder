@@ -248,14 +248,20 @@ the start.
 
 ## Testing
 
-- Each format has hand-written good and bad files: every error names its line, and write-then-parse gives back the
-  same grid or scenario.
+- Each format (map, scenario, plan) has hand-written good and bad inputs: every error names its line, and
+  write-then-parse gives back the same grid, scenario or plan.
+- The parsers take randomly damaged copies of valid files (20,000 of each kind, fixed seeds): the only exception is a
+  `ParseError` naming a line in the file, and whatever is accepted writes back and reads back the same. This runs
+  under ASan and UBSan too.
 - Every MovingAI MAPF map and scenario parses, and each scenario is a valid instance of all its entries with every
   goal reachable (when `data/` has been fetched; CI skips that test and says so).
 - The generators are pinned by hashes of their output, so a change in the random stream or the layout shows up as a
   failing test on every platform at once.
 - The validator has a test for each rule, with a small plan that breaks only that rule, and one for each kind of
-  plan it must accept (following, rotations, finishing early and waiting).
+  plan it must accept (following, rotations, finishing early and waiting); its conflicts must equal those of a
+  pairwise check of every two agents at every time on random-walk plans.
+- Reviews (an agent in its own worktree) prove each finding with a failing test, kept in `tests/review/` and
+  `tests/python/review/`; mutations of the code under test are re-run until each fails a test.
 - From day 2: every planner's every plan goes through the validator; CBS's SOC is compared with a brute-force
   search on tiny instances, and never above prioritized planning's.
 
