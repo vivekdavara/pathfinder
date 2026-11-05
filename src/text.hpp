@@ -103,7 +103,7 @@ inline std::string shown(std::string_view s) {
 
 // A decimal integer written with digits only (no sign, no spaces), if it is one and fits in 18 digits.
 inline std::optional<std::int64_t> digits(std::string_view s) {
-  if (s.empty() || s.size() > 18) {
+  if (s.empty()) {
     return std::nullopt;
   }
   for (const char c : s) {
@@ -111,8 +111,14 @@ inline std::optional<std::int64_t> digits(std::string_view s) {
       return std::nullopt;
     }
   }
+  // Leading zeros don't count towards the 18 digits (the day-1 review: "0000000000000000002" is 2).
+  const auto first = s.find_first_not_of('0');
+  const std::string_view significant = first == std::string_view::npos ? std::string_view("0") : s.substr(first);
+  if (significant.size() > 18) {
+    return std::nullopt;
+  }
   std::int64_t value = 0;
-  const auto result = std::from_chars(s.data(), s.data() + s.size(), value);
+  const auto result = std::from_chars(significant.data(), significant.data() + significant.size(), value);
   if (result.ec != std::errc{}) {
     return std::nullopt;
   }

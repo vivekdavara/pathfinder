@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <filesystem>
 #include <string>
 
@@ -109,6 +110,8 @@ TEST(MapFormat, DimensionsAreDigitsOnlyWithinTheLimits) {
     const int line = map_error(with_height(bad), &m);
     EXPECT_EQ(line, 2) << "height '" << bad << "': " << m;
   }
+  // The largest size is accepted (a mutant allowing only up to 9,999 survived the day-1 review).
+  EXPECT_EQ(parse_map("type octile\nheight 1\nwidth 10000\nmap\n" + std::string(10000, '.') + "\n").width(), 10000);
   std::string m;
   EXPECT_EQ(map_error("type octile\nheight 1\nwidth 10001\nmap\n.\n", &m), 3);
   EXPECT_NE(m.find("width must be a whole number 1..10000"), std::string::npos) << m;
@@ -189,6 +192,11 @@ TEST(ScenarioFormat, EachErrorNamesItsLine) {
   std::string m;
   EXPECT_EQ(scen_error("", &m), 1);
   EXPECT_EQ(scen_error("version 2\n"), 1);
+  EXPECT_EQ(scen_error("version 1 junk\n"), 1);
+  EXPECT_EQ(scen_error("version\n"), 1);
+  // Buckets fit an int.
+  EXPECT_EQ(scen_error(v + "2147483647\tm.map\t2\t2\t0\t0\t1\t1\t2\n"), -1);
+  EXPECT_EQ(scen_error(v + "2147483648\tm.map\t2\t2\t0\t0\t1\t1\t2\n"), 2);
   EXPECT_EQ(scen_error("0\tm.map\t2\t2\t0\t0\t1\t1\t2\n"), 1);  // no version line
   EXPECT_EQ(scen_error(v + "0\tm.map\t2\t2\t0\t0\t1\t1\n", &m), 2);
   EXPECT_NE(m.find("expected 9 fields"), std::string::npos) << m;
@@ -243,6 +251,20 @@ TEST(ScenarioFormat, WritesTabSeparatedAndReadsItBackExactly) {
   EXPECT_EQ(parse_scenario(text), s);
 }
 
+TEST(ScenarioFormat, WritesZeroTinyAndLargestLengthsAndReadsThemBack) {
+  for (const double length : {0.0, -0.0, 1e-70, 5e-324, 1e9, 0.5}) {
+    Scenario s;
+    s.entries.push_back(ScenarioEntry{0, "a.map", 4, 4, Point{1, 1}, Point{2, 2}, length});
+    const std::string text = write_scenario(s);
+    const Scenario back = parse_scenario(text);
+    EXPECT_EQ(back, s) << length;
+    EXPECT_FALSE(std::signbit(back.entries[0].optimal_length)) << length;
+  }
+  Scenario zero;
+  zero.entries.push_back(ScenarioEntry{0, "a.map", 4, 4, Point{1, 1}, Point{1, 1}, -0.0});
+  EXPECT_EQ(write_scenario(zero), "version 1\n0\ta.map\t4\t4\t1\t1\t1\t1\t0\n");
+}
+
 TEST(ScenarioFormat, WriteRefusesWhatParseWouldReject) {
   const ScenarioEntry good{0, "a.map", 4, 4, Point{0, 0}, Point{3, 3}, 6.0};
   const auto refused = [](ScenarioEntry e) {
@@ -268,6 +290,11 @@ TEST(ScenarioFormat, WriteRefusesWhatParseWouldReject) {
   EXPECT_TRUE(refused(e));
   e = good;
   e.goal = Point{4, 0};
+  EXPECT_TRUE(refused(e));
+  e.goal = Point{0, 4};
+  EXPECT_TRUE(refused(e));
+  e.goal = Point{3, 3};
+  e.start = Point{-1, 0};
   EXPECT_TRUE(refused(e));
   e = good;
   e.width = 0;

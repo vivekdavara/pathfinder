@@ -60,5 +60,36 @@ TEST(ReviewMovingAi, ReadingADirectoryIsAReadErrorNotAParseError) {
   }
 }
 
+// src/movingai.cpp write_scenario: -0.0 passes the range check (-0.0 >= 0.0), to_chars writes "-0", and
+// parse_scenario rejects a sign, so parse_scenario(write_scenario(s)) throws instead of giving s back.
+TEST(ReviewMovingAi, WriteScenarioOfNegativeZeroReadsBack) {
+  Scenario s;
+  s.entries.push_back(ScenarioEntry{0, "a.map", 4, 4, Point{1, 1}, Point{1, 1}, -0.0});
+  std::string text;
+  try {
+    text = write_scenario(s);
+  } catch (const std::invalid_argument&) {
+    return;  // refusing it is fine too
+  }
+  EXPECT_NO_THROW(EXPECT_EQ(parse_scenario(text), s)) << text;
+}
+
+// src/movingai.cpp write_scenario: any length in 0..1e9 passes the range check, but fixed notation in a 64-byte
+// buffer can't hold one below about 1e-62, so the writer throws "didn't format" for a value it says is in range.
+TEST(ReviewMovingAi, WriteScenarioWritesEveryLengthInItsRange) {
+  Scenario s;
+  s.entries.push_back(ScenarioEntry{0, "a.map", 4, 4, Point{0, 0}, Point{1, 1}, 1e-70});
+  std::string text;
+  ASSERT_NO_THROW(text = write_scenario(s));
+  EXPECT_EQ(parse_scenario(text), s);
+}
+
+// src/movingai.cpp digits(): DESIGN.md says height and width are "decimal integers 1..10,000, digits only" and
+// scenario integers "decimal digits only", but more than 18 characters is refused even when the value is small.
+TEST(ReviewMovingAi, LeadingZerosDontMakeAWholeNumberInvalid) {
+  EXPECT_NO_THROW(parse_map("type octile\nheight 0000000000000000002\nwidth 1\nmap\n.\n.\n"));
+  EXPECT_NO_THROW(parse_scenario("version 1\n0\tm.map\t2\t2\t0\t0\t1\t0000000000000000001\t1\n"));
+}
+
 }  // namespace
 }  // namespace pathfinder

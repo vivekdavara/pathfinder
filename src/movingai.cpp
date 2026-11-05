@@ -297,9 +297,12 @@ std::string write_scenario(const Scenario& scenario) {
     if (!(e.optimal_length >= 0.0 && e.optimal_length <= kMaxOptimalLength)) {
       refuse("the optimal length must be 0..1e9");
     }
-    std::array<char, 64> buf{};
-    const auto [end, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), e.optimal_length,
-                                         std::chars_format::fixed);
+    // -0.0 passes the range check but would be written "-0", which the parser refuses; and the shortest fixed form
+    // of a tiny length is long (the smallest double, 5e-324, takes 326 characters), so the buffer holds any value
+    // in range. Both from the day-1 review.
+    const double length = e.optimal_length == 0.0 ? 0.0 : e.optimal_length;
+    std::array<char, 512> buf{};
+    const auto [end, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), length, std::chars_format::fixed);
     if (ec != std::errc{}) {
       refuse("the optimal length didn't format");
     }
