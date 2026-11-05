@@ -166,8 +166,10 @@ the case it was in, so it duplicated 1 time in 6 instead of half the time.
 **How do you catch platform differences?**
 CI (`.github/workflows/ci.yml`) builds and tests with GCC 14 and Clang 18 on Ubuntu and Apple Clang on macOS, plus
 ASan and UBSan; the pinned hashes make generator drift fail everywhere at once. GCC flags things Clang doesn't, so
-`make gcc-check` compiles every project file with Homebrew's g++-15 before a push. (CI hasn't run yet: the GitHub
-repository doesn't exist; see the README.)
+`make gcc-check` compiles every project file with Homebrew's g++-15 before a push. Even so, CI's first run was red,
+on macOS: the runner's Xcode 16 libc++ has no floating-point `std::from_chars`, which this Mac's newer Clang has, and
+no feature macro tells the two apart. Decimals now go through one strict parser, with a `strtod_l` fallback on
+libc++ before 20, tested here by forcing it.
 
 **How are dependencies pinned?**
 GoogleTest and pybind11 are fetched by CMake as release tarballs pinned by SHA-256. One near miss: I first looked up

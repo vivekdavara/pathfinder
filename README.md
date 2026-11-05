@@ -159,8 +159,11 @@ Measured on an Apple M3, macOS 26.6.2, Apple Clang 21, on battery; every number 
   table is 4 bytes per cell, which is what makes one table per agent fine on warehouse maps and 3.9 GB on orz900d
   with 1,000 agents (DESIGN.md "The planners").
 
-CI (three compilers on Linux and macOS, plus ASan) is written but hasn't run: the GitHub repository doesn't exist
-yet (see Limitations).
+- **CI** (GitHub Actions): green on all four jobs since `9f749fd` (run 42071924503: GCC 14 and Clang 18 on
+  ubuntu-24.04, Apple Clang 17 on macos-15, 100 of 100 tests each in Debug and Release; ASan + UBSan, 98 of 98). The
+  first run (42070958034, at `0a6e6fe`) was red on macOS only: Xcode 16's libc++ has no floating-point
+  `std::from_chars`, which this Mac's Clang 21 has, so decimals are now parsed by one strict helper with a
+  `strtod_l` fallback there (`9f749fd`).
 
 ## Review of day 1
 
@@ -225,9 +228,6 @@ chose between duplicating and dropping a line wrongly (`bdc43d0`).
 ## Limitations
 
 - No planner yet (days 2 and 3), so no planning results.
-- **CI hasn't run**: `gh repo create vivekdavara/pathfinder --public` was refused by this session's permission check,
-  so the repository is local only until it's created. Locally, `make check`, `make release`, `make asan` and `make
-  gcc-check` pass.
 - Movement is 4-connected only, with unit costs; MovingAI's terrain types other than passable/blocked (`S`, `W`) are
   folded into those two (the MAPF maps use only `.`, `@` and `T`).
 - `random_scenario` and `pathfinder check` run one octile (Dijkstra) search per agent, stopped at its goal, which is
