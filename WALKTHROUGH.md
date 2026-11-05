@@ -139,6 +139,13 @@ scenario built in code (or from Python) never meets the parser, and `y * width +
 onto the next row without any error. Checks belong at the boundary where the data enters, and an instance has more
 than one way in.
 
+**And the second round?**
+It was asked what the first round's fixes broke, and found two: the plan parser I'd just written refused more than
+a million agents while `write_plan` happily wrote them, so the format's own round-trip promise failed (the bound is
+now the grid's cell count, since no instance has more agents than cells); and my new duplicate check in
+`fetch_maps.py` compared names exactly, on a Mac file system that treats `x.map` and `X.map` as one file. Both
+fixes came from new code, which is why a second round is worth its cost.
+
 **Tell me about a bug in your own test tooling.**
 Two. My first test of the bounded draw's bias used n = 2^63 + 1 and expected about half the draws above 2^63 - 1;
 but only two values lie there, so it failed on correct code. The right example is n = 3 · 2^62, where a plain modulo
@@ -170,6 +177,12 @@ library as `pathfinder._core` with C++ exceptions mapped to Python ones (`ParseE
 Past the last timed reservation the problem is static, and a shortest path in a static grid has at most as many
 steps as there are passable cells, so a bound of (last reservation time + passable cells) on t is enough: a search
 that passes it reports no path (DESIGN.md "The planners").
+
+**What will the heuristic cost?**
+Measured on day 1 (`make bench`): one BFS over a 1,024 x 1,024 map takes 8.5 ms and a 4.2 MB table (4 bytes a
+cell). One table per agent is 223 MB for 1,000 agents on the largest warehouse map, but 3.9 GB on orz900d, whose
+978,096 cells are 90% blocked. So day 2 will index the tables by passable cell or compute them on demand, and
+measure which; the validator, at about 21 million agent-steps a second, won't be the bottleneck.
 
 **What's subtle about CBS and goals?**
 A vertex constraint on an agent's goal at time t means its path can't end there before t + 1, because it would then
