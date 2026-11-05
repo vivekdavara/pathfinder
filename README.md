@@ -112,8 +112,9 @@ and 23 swap conflicts (`PYTHONPATH=build/dev/python .venv/bin/python examples/in
 
 Measured on an Apple M3, macOS 26.6.2, Apple Clang 21, on battery; every number comes from the command next to it.
 
-- **Tests**: 100 CTest tests (`ctest --preset dev -N`): 88 GoogleTest tests, the two reviews' 8, the CLI script (39
-  commands with their exit codes and outputs), the review's CLI check, the pytest suite (20 tests) and the example. `make check`
+- **Tests**: 100 CTest tests (`ctest --preset dev -N`): 88 GoogleTest tests, the reviews' 8, the CLI script (39
+  commands with their exit codes and outputs), the review's CLI check, the pytest suite (25 tests, 9 of them from the
+  reviews) and the example. A fresh clone at `e77c300` ran every CI step: 100 of 100 in Debug and in Release. `make check`
   passes, its tests in 8.6 s (CTest's "Total Test time"; most of it is the benchmark-set test). `make asan` passes
   (98 tests, 24.2 s, at `64eff8a`), and `make gcc-check` compiles every project file with g++-15, Debug and Release, warnings as errors. A
   fresh clone at `86ce608` ran every CI step (`make venv`, `make check`, `make release`, the benchmark smoke run):
@@ -189,6 +190,13 @@ wrote them, so a valid plan couldn't be read back (`90a0305`: the bound is now t
 duplicate check in `fetch_maps.py` compared names exactly on a file system (APFS) that ignores case and Unicode
 normalisation (`66c25da`). Five of its eight mutants survived (the plan parser's parenthesis and bound checks, its
 trailing-text loop, and `read_file` stopping after 64 KiB); each now fails a test (`90a0305`, `4b3d411`).
+
+A third round (at `e77c300`, on the changes since the second; tests in `tests/python/review3/`) found three more, again
+all in code written after the round before: the case-folding key still let 8 pairs of Greek spellings that APFS
+stores as one file through (`fc4a207`, now Unicode's canonical caseless match); and the new any-size Python
+coordinates refused `__index__` objects such as numpy's integers and turned an IndexError into a ValueError for ints
+over 4,300 digits (`5e17d91`). It found `octile_distance` bit-identical to the full search on 82,134 pairs, and the
+plan format and the example clean.
 Found by my own tests: a `\r` inside a scenario line became part of a map name that the writer then refused
 (`d9bcff4`, the robustness test's first run); `load_scenario`'s error path was untested (`07fbfab`, from the coverage
 report); GCC 15 flagged a false maybe-uninitialized in the robustness test that Clang didn't, and the same test

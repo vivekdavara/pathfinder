@@ -150,7 +150,9 @@ It was asked what the first round's fixes broke, and found two: the plan parser 
 a million agents while `write_plan` happily wrote them, so the format's own round-trip promise failed (the bound is
 now the grid's cell count, since no instance has more agents than cells); and my new duplicate check in
 `fetch_maps.py` compared names exactly, on a Mac file system that treats `x.map` and `X.map` as one file. Both
-fixes came from new code, which is why a second round is worth its cost.
+fixes came from new code, which is why a second round is worth its cost. A third round, on the changes after the
+second, found three more in code written after that round (a case-folding key that still let some Greek spellings
+collide, and two regressions in the Python coordinate handling), and nothing in the parts it had already cleared.
 
 **Tell me about a bug in your own test tooling.**
 Two. My first test of the bounded draw's bias used n = 2^63 + 1 and expected about half the draws above 2^63 - 1;
