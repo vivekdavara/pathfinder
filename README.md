@@ -104,10 +104,10 @@ print(check.valid, [pf.describe(p, g) for p in check.problems][:2])
 
 Measured on an Apple M3, macOS 26.6.2, Apple Clang 21, on battery; every number comes from the command next to it.
 
-- **Tests**: 98 CTest tests (`ctest --preset dev -N`): 87 GoogleTest tests, the two reviews' 8, the CLI script (39
-  commands with their exit codes and outputs), the review's CLI check, and the pytest suite (19 tests). `make check`
-  passes, its tests in 11.2 s (CTest's "Total Test time"; nearly all of it is the benchmark-set test). `make asan`
-  passes, and `make gcc-check` compiles every project file with g++-15, Debug and Release, warnings as errors. A
+- **Tests**: 99 CTest tests (`ctest --preset dev -N`): 88 GoogleTest tests, the two reviews' 8, the CLI script (39
+  commands with their exit codes and outputs), the review's CLI check, and the pytest suite (20 tests). `make check`
+  passes, its tests in 8.6 s (CTest's "Total Test time"; most of it is the benchmark-set test). `make asan` passes
+  (98 tests, 24.2 s, at `64eff8a`), and `make gcc-check` compiles every project file with g++-15, Debug and Release, warnings as errors. A
   fresh clone at `86ce608` ran every CI step (`make venv`, `make check`, `make release`, the benchmark smoke run):
   96 of 96 passed in Debug and in Release, the two benchmark-set tests skipping as they will in CI.
 - **Coverage** (`make coverage`, at `4b3d411`): 761 of 765 lines (99.48%), 76 of 76 functions, 554 of 567 branches
@@ -122,8 +122,8 @@ Measured on an Apple M3, macOS 26.6.2, Apple Clang 21, on battery; every number 
   first `pathfinder check`, at `466fcfa`, which compared with BFS, run over all 825 files: 94 s). A Python probe
   matched 272 of 272 sampled entries (the first 60, or all 32, of five maps' `random-1` scenarios) to the octile
   distance without corner cutting, and 64 of 272 with it. `make check-maps` (at `5ef5763`) then compared every
-  entry: **690,275 of 690,275** equal the octile distance (to 1e-6), 0 files failing, 767 s on battery with other
-  work running. So `random_scenario` writes octile lengths too, and `check` reports octile matches; the planners use
+  entry: **690,275 of 690,275** equal the octile distance (to 1e-6), 0 files failing, 767 s on battery with a review
+  agent and builds running; at `9a46eee`, with the single-pair search, again 690,275 of 690,275, in 398 s, alone. So `random_scenario` writes octile lengths too, and `check` reports octile matches; the planners use
   4-connected BFS distances, never this column.
 - **The validator** agrees with a pairwise check of every two agents at every time step on 300 random-walk plans
   (`Validate.FindsTheSameConflictsAsAPairwiseCheckOnRandomWalks`), and with the review's independent Python model of
@@ -144,7 +144,9 @@ Measured on an Apple M3, macOS 26.6.2, Apple Clang 21, on battery; every number 
   | 512 | 1.93 ms | 14.3 ms | 647 µs |
   | 1,024 | 8.47 ms | 58.4 ms | 2.46 ms |
 
-  `validate` checks about 21 million agent-steps a second (1,000 agents over 200 steps: 9.56 ms). The planners' BFS
+  `validate` checks about 21 million agent-steps a second (1,000 agents over 200 steps: 9.56 ms). One start-goal
+  octile distance (64 random goals, `BM_OctilePair*` at `64eff8a`, CV at most 6.7%): 581 µs by the full search
+  against 228 µs by the single-pair search that stops at the goal at 128 a side, 13.6 ms against 6.87 ms at 512. The planners' BFS
   table is 4 bytes per cell, which is what makes one table per agent fine on warehouse maps and 3.9 GB on orz900d
   with 1,000 agents (DESIGN.md "The planners").
 
@@ -212,8 +214,8 @@ chose between duplicating and dropping a line wrongly (`bdc43d0`).
   gcc-check` pass.
 - Movement is 4-connected only, with unit costs; MovingAI's terrain types other than passable/blocked (`S`, `W`) are
   folded into those two (the MAPF maps use only `.`, `@` and `T`).
-- `random_scenario` and `pathfinder check` run one octile (Dijkstra) search per agent, which is slow for many agents
-  on the largest maps (orz900d, 1,491 x 656).
+- `random_scenario` and `pathfinder check` run one octile (Dijkstra) search per agent, stopped at its goal, which is
+  still slow for many agents on the largest maps (orz900d, 1,491 x 656).
 
 ## Data and license
 
