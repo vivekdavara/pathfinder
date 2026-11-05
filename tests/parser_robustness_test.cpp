@@ -30,7 +30,8 @@ std::string damage(const std::string& text, SplitMix64& rng) {
   std::string out = text;
   const auto pick = [&] { return kBytes[rng.below(kBytes.size())]; };
   const auto at = [&](std::size_t n) { return n == 0 ? std::size_t{0} : rng.below(n); };
-  switch (rng.below(6)) {
+  const auto kind = rng.below(6);
+  switch (kind) {
     case 0:
       if (!out.empty()) {
         out[at(out.size())] = pick();
@@ -57,8 +58,11 @@ std::string damage(const std::string& text, SplitMix64& rng) {
       }
       if (!lines.empty()) {
         const auto i = at(lines.size());
-        if (rng.below(6) == 3) {
-          lines.insert(lines.begin() + static_cast<std::ptrdiff_t>(i), lines[i]);
+        if (kind == 3) {
+          // A copy first: inserting an element of the same vector is legal, but GCC 15 at -O3 reports a false
+          // maybe-uninitialized inside libstdc++'s copy of it.
+          const std::string line = lines[i];
+          lines.insert(lines.begin() + static_cast<std::ptrdiff_t>(i), line);
         } else {
           lines.erase(lines.begin() + static_cast<std::ptrdiff_t>(i));
         }
