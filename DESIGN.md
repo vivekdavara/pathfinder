@@ -84,7 +84,8 @@ version 1
   diagonals costing √2 and never cutting a corner (a diagonal needs both cells it passes between to be free), rounded
   to 8 decimals. This holds for the MAPF scenarios too, although MAPF agents move 4-connected: in
   `empty-8-8-random-1.scen`, (1, 4) → (4, 7) is stated as 4.24264069 (3√2), where 4-connected moves need 6.
-  `make check-maps` compares every entry of the 825 random scenarios with `octile_distances`. Pathfinder doesn't
+  `make check-maps` compares every entry of the 825 random scenarios with `octile_distance` (the same Dijkstra
+  search as `octile_distances`, stopped once the goal is settled, so the same value to the last bit). Pathfinder doesn't
   plan with this column; its planners compute 4-connected distances themselves. (Day 1 first assumed the MAPF files
   stated 4-connected lengths; only 46,078 of their 690,275 entries do, and a corner-cutting octile rule matched 64 of
   272 sampled entries, against 272 of 272 without it.)
@@ -203,7 +204,8 @@ found no path around the ones planned before it.
 ## Python and the simulator (day 4)
 
 A pybind11 module (`pathfinder._core`, re-exported by the `pathfinder` package) exposes the grid, the file formats,
-the generators, the validator and the planners. The experiments are Python scripts on top of it, and a step-by-step
+the generators, the validator and the planners. Day 1's `examples/independent_paths.py` is the first script on it:
+each agent's shortest path alone, and the conflicts that leaves. The experiments are Python scripts on top of it, and a step-by-step
 simulator executes a plan one time step at a time, checking each step (so it can also replay a plan with a robot
 delayed, to show what a plan's lack of slack costs).
 

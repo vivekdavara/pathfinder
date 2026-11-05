@@ -19,6 +19,12 @@ collisions, minimising the sum of the agents' arrival times. Planning each agent
 problem's state space is the product of every agent's position, and finding an optimal plan is NP-hard (Yu and
 LaValle, 2013). The planners (days 2 and 3) are two ways of not searching that product space directly.
 
+**Why can't each robot just take its own shortest path?**
+`examples/independent_paths.py` tries exactly that: each of 40 agents on the default warehouse floor (204 free
+cells) walks down its own BFS distances. Every path is legal and as short as possible, so the sum of costs, 591, is
+a lower bound no planner can beat, but the validator finds 83 vertex and 23 swap conflicts; with 150 agents, 1,145
+and 318. Removing those at the least extra cost is the whole problem.
+
 **What counts as a collision?**
 Two kinds (DESIGN.md "The model"): a *vertex conflict*, two agents in one cell at one time, and an *edge conflict*,
 two agents swapping cells in one step. Following (moving into a cell its occupant is leaving) and rotations of three
