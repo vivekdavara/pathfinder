@@ -54,6 +54,37 @@ TEST(Validate, AcceptsAValidPlanAndComputesItsCosts) {
   EXPECT_EQ(check.makespan, 3U);
 }
 
+TEST(Validate, TheMakespanIsTheLargestCostWhereverItIs) {
+  // Costs 4, 1 and 2: the makespan is the first agent's (a mutant taking the last agent's cost survived the day-1
+  // review's C++ run).
+  const Grid g(5, 3);
+  const Instance inst{g, {Agent{at(g, 0, 0), at(g, 4, 0)}, Agent{at(g, 0, 1), at(g, 1, 1)}, Agent{at(g, 0, 2), at(g, 2, 2)}}};
+  const Plan plan{{at(g, 0, 0), at(g, 1, 0), at(g, 2, 0), at(g, 3, 0), at(g, 4, 0)},
+                  {at(g, 0, 1), at(g, 1, 1)},
+                  {at(g, 0, 2), at(g, 1, 2), at(g, 2, 2)}};
+  const PlanCheck check = validate(inst, plan);
+  ASSERT_TRUE(check.valid());
+  EXPECT_EQ(check.costs, (std::vector<std::uint32_t>{4, 1, 2}));
+  EXPECT_EQ(check.sum_of_costs, 7U);
+  EXPECT_EQ(check.makespan, 4U);
+}
+
+TEST(Validate, AOneCellPathAwayFromTheGoalIsAWrongGoal) {
+  const Grid g = small();
+  const PlanCheck check = validate(Instance{g, {Agent{0, 2}}}, Plan{{0}});
+  ASSERT_EQ(check.problems.size(), 1U);
+  EXPECT_EQ(check.problems[0], (Problem{ProblemKind::kWrongGoal, 0, 0, 0, 0, 2}));
+}
+
+TEST(Validate, ReportsABlockedCellAtTimeZero) {
+  const Grid g = small();
+  // The path starts on the blocked (1, 1) instead of the agent's start (0, 1): both are reported, start first.
+  const Instance inst{g, {Agent{at(g, 0, 1), at(g, 0, 0)}}};
+  const PlanCheck check = validate(inst, Plan{{at(g, 1, 1), at(g, 0, 1), at(g, 0, 0)}});
+  ASSERT_EQ(kinds(check), (std::vector{ProblemKind::kWrongStart, ProblemKind::kBlockedCell}));
+  EXPECT_EQ(check.problems[1], (Problem{ProblemKind::kBlockedCell, 0, 0, 0, at(g, 1, 1), 0}));
+}
+
 TEST(Validate, AnEmptyInstanceHasAnEmptyValidPlan) {
   const PlanCheck check = validate(Instance{small(), {}}, Plan{});
   EXPECT_TRUE(check.valid());

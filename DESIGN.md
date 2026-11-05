@@ -60,7 +60,9 @@ map
   "passable from regular terrain" in MovingAI's legend). Blocked: `@` and `O` (out of bounds), `T` (trees) and `W`
   (water, which MovingAI makes passable only from water; Pathfinder has no terrain modes, so it is blocked). Any
   other character is an error.
-- Lines may end in `\n` or `\r\n`. Blank lines after the last row are ignored; anything else after it is an error.
+- Lines may end in `\n` or `\r\n` (and a `\r` ending the file's last line is dropped too). Header lines are fields
+  separated by runs of spaces or tabs, so extra spaces around them, `map` included, don't matter. Blank lines after
+  the last row are ignored; anything else after it is an error.
 - Errors name the line number and say what was expected. Parsing never guesses: a short row, a missing header field
   or an unknown character is an error, not a padded or skipped row.
 - Writing produces the canonical form (`\n` line ends, `.` for passable and `@` for blocked), and parsing that gives
@@ -123,10 +125,11 @@ It is deliberately simple (a per-time-step occupancy map, O(k · T) for k agents
 everything it finds, in a fixed order, rather than stopping at the first problem:
 
 1. the plan has one path per agent (else nothing else is checked);
-2. no path is empty; each starts at its agent's start and ends at its goal;
-3. every cell on a path is inside the grid and passable, and every step is a wait or a move to a 4-neighbour;
-4. vertex conflicts, with finished agents sitting on their goals until the last path ends;
-5. edge (swap) conflicts.
+2. then each agent's own path, agent by agent: it isn't empty, it starts at the agent's start and ends at its goal,
+   and, by time, every cell is inside the grid and passable and every step is a wait or a move to a 4-neighbour (so
+   all of agent 0's problems come before any of agent 1's);
+3. vertex conflicts, by time, with finished agents sitting on their goals until the last path ends;
+4. edge (swap) conflicts, by time.
 
 It also computes each path's cost, the SOC and the makespan, by the definitions above.
 
