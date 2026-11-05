@@ -16,6 +16,13 @@ target_compile_definitions(pathfinder_tests PRIVATE PATHFINDER_SOURCE_DIR="${PRO
 pathfinder_set_warnings(pathfinder_tests)
 gtest_discover_tests(pathfinder_tests DISCOVERY_MODE PRE_TEST)
 
+# The day-1 review's tests (tests/review/): each failed at the commit it reviewed.
+add_executable(pathfinder_review_tests review/review_test.cpp)
+target_link_libraries(pathfinder_review_tests PRIVATE pathfinder::pathfinder GTest::gtest_main)
+target_compile_definitions(pathfinder_review_tests PRIVATE PATHFINDER_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+pathfinder_set_warnings(pathfinder_review_tests)
+gtest_discover_tests(pathfinder_review_tests DISCOVERY_MODE PRE_TEST TEST_PREFIX "review.")
+
 # The CLI's outputs and exit codes.
 add_test(NAME cli COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/cli_test.sh $<TARGET_FILE:pathfinder_cli>
   ${CMAKE_CURRENT_SOURCE_DIR}/data)

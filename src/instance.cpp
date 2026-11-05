@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 #include "pathfinder/distance.hpp"
 
@@ -57,7 +58,15 @@ Instance make_instance(const Grid& grid, const Scenario& scenario, std::size_t a
                                   "x" + std::to_string(e.height) + " map, but the map is " +
                                   std::to_string(grid.width()) + "x" + std::to_string(grid.height()));
     }
-    // The parser has checked both points are inside the stated size, which is the grid's.
+    // The parser checks this, but a scenario built in code (or from Python) never went through it, and grid.id()
+    // would wrap a point off the grid onto another cell.
+    for (const auto& [what, p] : {std::pair{"start", e.start}, std::pair{"goal", e.goal}}) {
+      if (!grid.in_bounds(p)) {
+        throw std::invalid_argument("scenario entry " + std::to_string(i) + "'s " + what + " (" +
+                                    std::to_string(p.x) + ", " + std::to_string(p.y) + ") is outside the " +
+                                    std::to_string(grid.width()) + "x" + std::to_string(grid.height()) + " map");
+      }
+    }
     instance.agents.push_back(Agent{grid.id(e.start), grid.id(e.goal)});
   }
   check_instance(instance);
