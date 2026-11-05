@@ -84,9 +84,11 @@ def members(archive: zipfile.ZipFile, directory: str, suffix: str) -> list[tuple
             relative = path
         else:
             raise SystemExit(f"unexpected member {info.filename!r} (not at the top level or in {directory}/); stopping")
-        # Compared as the file system will: macOS's APFS ignores case and Unicode normalisation, so x.map and X.map
-        # (or an NFC and an NFD spelling of one name) would be one file there (the day-1 second review).
-        key = unicodedata.normalize("NFC", str(relative)).casefold()
+        # Compared case- and normalisation-blind, as macOS's APFS compares names: x.map and X.map, or an NFC and an
+        # NFD spelling of one name, would be one file there (the day-1 second review). The key is Unicode's canonical
+        # caseless match, NFD(casefold(NFD(s))): folding first and normalising once (NFC, then casefold) still let
+        # 8 pairs of Greek spellings through, since casefold's output needn't be normalised (the third review).
+        key = unicodedata.normalize("NFD", unicodedata.normalize("NFD", str(relative)).casefold())
         if key in seen:
             raise SystemExit(f"member {info.filename!r} would land on the same file as another; stopping")
         seen.add(key)
