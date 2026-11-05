@@ -33,6 +33,12 @@ target_compile_features(pathfinder PUBLIC cxx_std_20)
 set_target_properties(pathfinder PROPERTIES POSITION_INDEPENDENT_CODE ON)
 pathfinder_set_warnings(pathfinder)
 
+# The command-line tool (tools/pathfinder_cli.cpp), built as `pathfinder`.
+add_executable(pathfinder_cli tools/pathfinder_cli.cpp)
+set_target_properties(pathfinder_cli PROPERTIES OUTPUT_NAME pathfinder)
+target_link_libraries(pathfinder_cli PRIVATE pathfinder::pathfinder)
+pathfinder_set_warnings(pathfinder_cli)
+
 if(PATHFINDER_BUILD_TESTS OR PATHFINDER_BUILD_PYTHON)
   include(cmake/Dependencies.cmake)
 endif()
