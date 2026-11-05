@@ -167,6 +167,11 @@ found no path around the ones planned before it.
 
 - **Heuristic**: for each agent, the BFS distance to its goal from every cell, ignoring other agents. It is exact on
   the empty problem, so it is admissible and consistent for the space-time searches below.
+  **Its budget, measured on day 1** (`make bench`, Apple M3, on battery): one BFS over a 1,024 x 1,024 map (20%
+  blocked, synthetic) takes 8.5 ms and its table, 4 bytes per cell, 4.2 MB. A table per agent is cheap on warehouse
+  maps (warehouse-20-40-10-2-2 has 55,760 cells: 223 KB an agent, 223 MB for 1,000) but not on the largest
+  benchmark map (orz900d, 978,096 cells of which only 96,603 are passable: 3.9 GB for 1,000 agents). Day 2 will
+  index the tables by passable cell (a tenth of that on orz900d) or compute them on demand, and measure which.
 - **Space-time A\*** (day 2): A\* over states (cell, t), whose successors are the five actions, with f = t + h(cell).
   A **reservation table** holds what the search must avoid: (cell, t) vertex reservations, (u → v, t) edge
   reservations, and "from t on" reservations of cells where an earlier agent rests at its goal. Its goal test is

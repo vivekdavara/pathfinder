@@ -104,12 +104,14 @@ print(check.valid, [pf.describe(p, g) for p in check.problems][:2])
 
 Measured on an Apple M3, macOS 26.6.2, Apple Clang 21, on battery; every number comes from the command next to it.
 
-- **Tests**: 96 CTest tests (`ctest --preset dev -N`): 86 GoogleTest tests, the review's 7, the CLI script (39
-  commands with their exit codes and outputs), the review's CLI check, and the pytest suite (15 tests). `make check`
-  passes, its tests in 10.1 s (CTest's "Total Test time"; nearly all of it is the benchmark-set test). `make asan`
-  passes, and `make gcc-check` compiles every project file with g++-15, Debug and Release, warnings as errors.
-- **Coverage** (`make coverage`, at `bdc43d0`): 758 of 762 lines (99.48%), 76 of 76 functions, 550 of 565 branches
-  (97.35%) of the library (`src/`, `include/`) by the C++ tests and the CLI tests. The 4 lines left are defensive:
+- **Tests**: 98 CTest tests (`ctest --preset dev -N`): 87 GoogleTest tests, the two reviews' 8, the CLI script (39
+  commands with their exit codes and outputs), the review's CLI check, and the pytest suite (19 tests). `make check`
+  passes, its tests in 11.2 s (CTest's "Total Test time"; nearly all of it is the benchmark-set test). `make asan`
+  passes, and `make gcc-check` compiles every project file with g++-15, Debug and Release, warnings as errors. A
+  fresh clone at `86ce608` ran every CI step (`make venv`, `make check`, `make release`, the benchmark smoke run):
+  96 of 96 passed in Debug and in Release, the two benchmark-set tests skipping as they will in CI.
+- **Coverage** (`make coverage`, at `4b3d411`): 761 of 765 lines (99.48%), 76 of 76 functions, 554 of 567 branches
+  (97.71%) of the library (`src/`, `include/`) by the C++ tests and the CLI tests. The 4 lines left are defensive:
   `digits()` on an empty string (no caller passes one), an int64 overflow that 18 digits can't reach, a format
   failure the 512-byte buffer can't hit, and `describe`'s fallback for an unknown enum value.
 - **The benchmark set** (`make maps`, then the tests and `make check-maps`): all 33 MAPF maps and 825 random
@@ -132,13 +134,26 @@ Measured on an Apple M3, macOS 26.6.2, Apple Clang 21, on battery; every number 
   (`ParserRobustness.*`, also under ASan); its first run found the `\r`-in-a-map-name bug below.
 - **Determinism**: SplitMix64 matches the reference outputs for seed 1234567; four generated files are pinned by
   FNV-1a hash in both the C++ and the Python tests.
+- **What the building blocks cost** (`make bench` at `4b3d411`, optimised build, medians of 5 repetitions, CV at most
+  13%; on battery, load average 6.9 at the start; synthetic random maps with 20% obstacles):
+
+  | Map side | BFS distances | octile distances | parse the `.map` |
+  |---|---|---|---|
+  | 32 | 4.30 µs | 21.4 µs | 1.90 µs |
+  | 128 | 68.5 µs | 531 µs | 25.5 µs |
+  | 512 | 1.93 ms | 14.3 ms | 647 µs |
+  | 1,024 | 8.47 ms | 58.4 ms | 2.46 ms |
+
+  `validate` checks about 21 million agent-steps a second (1,000 agents over 200 steps: 9.56 ms). The planners' BFS
+  table is 4 bytes per cell, which is what makes one table per agent fine on warehouse maps and 3.9 GB on orz900d
+  with 1,000 agents (DESIGN.md "The planners").
 
 CI (three compilers on Linux and macOS, plus ASan) is written but hasn't run: the GitHub repository doesn't exist
 yet (see Limitations).
 
 ## Review of day 1
 
-A review agent (at `5ef5763`, in its own worktree, worded as a correctness review) proved each finding with a failing
+The first review agent (at `5ef5763`, in its own worktree, worded as a correctness review) proved each finding with a failing
 test; those tests are in `tests/review/` and `tests/python/review/`, and each fix came with its test:
 
 1. `make_instance` trusted entry coordinates, and `grid.id()` wraps, so a code-built entry at (4, 0) on a 4x4 map
@@ -157,9 +172,17 @@ test; those tests are in `tests/review/` and `tests/python/review/`, and each fi
 11. `fetch_maps.py` flattened nested archive members, so two could overwrite each other (`9c307bb`).
 
 It found no bug in `validate`; seven of its 14 mutants survived, and each now fails a test (`897a504`, `8b29b30`).
+
+A second round (at `8b29b30`, asked what the first round's fixes broke; tests in `tests/review2/` and
+`tests/python/review2/`) found two more: the new plan parser refused more than a million agents while `write_plan`
+wrote them, so a valid plan couldn't be read back (`90a0305`: the bound is now the grid's cell count); and the new
+duplicate check in `fetch_maps.py` compared names exactly on a file system (APFS) that ignores case and Unicode
+normalisation (`66c25da`). Five of its eight mutants survived (the plan parser's parenthesis and bound checks, its
+trailing-text loop, and `read_file` stopping after 64 KiB); each now fails a test (`90a0305`, `4b3d411`).
 Found by my own tests: a `\r` inside a scenario line became part of a map name that the writer then refused
 (`d9bcff4`, the robustness test's first run); `load_scenario`'s error path was untested (`07fbfab`, from the coverage
-report); GCC 15 flagged a false maybe-uninitialized in the robustness test that Clang didn't (`bdc43d0`).
+report); GCC 15 flagged a false maybe-uninitialized in the robustness test that Clang didn't, and the same test
+chose between duplicating and dropping a line wrongly (`bdc43d0`).
 
 ## Design decisions
 
