@@ -20,6 +20,8 @@ include(cmake/Sanitizers.cmake)
 # The planning library: grids, the MovingAI formats, generators, and the plan checker.
 add_library(pathfinder
   src/grid.cpp
+  src/distance.cpp
+  src/instance.cpp
   src/movingai.cpp)
 add_library(pathfinder::pathfinder ALIAS pathfinder)
 target_include_directories(pathfinder PUBLIC ${PROJECT_SOURCE_DIR}/include)

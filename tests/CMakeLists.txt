@@ -1,7 +1,9 @@
 include(GoogleTest)
 
 add_executable(pathfinder_tests
+  distance_test.cpp
   grid_test.cpp
+  instance_test.cpp
   movingai_test.cpp)
 target_link_libraries(pathfinder_tests PRIVATE pathfinder::pathfinder GTest::gtest_main)
 # Where the tests find their data files (tests/data) and the fetched benchmark maps (data/).
