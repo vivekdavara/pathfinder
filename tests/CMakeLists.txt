@@ -22,6 +22,7 @@ target_link_libraries(pathfinder_review_tests PRIVATE pathfinder::pathfinder GTe
 target_compile_definitions(pathfinder_review_tests PRIVATE PATHFINDER_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 pathfinder_set_warnings(pathfinder_review_tests)
 gtest_discover_tests(pathfinder_review_tests DISCOVERY_MODE PRE_TEST TEST_PREFIX "review.")
+add_test(NAME review.cli COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/review/cli_review_test.sh $<TARGET_FILE:pathfinder_cli>)
 
 # The CLI's outputs and exit codes.
 add_test(NAME cli COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/cli_test.sh $<TARGET_FILE:pathfinder_cli>

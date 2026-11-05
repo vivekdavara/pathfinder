@@ -1,5 +1,6 @@
 // pathfinder: the command-line tool over the library. Exit status 0 when all is well, 1 when `check` finds a
-// problem with the instance or `validate` with the plan, 2 for a usage error or a file that can't be read or parsed.
+// problem with the instance or `validate` with the plan, 2 for a usage error, a file that can't be read or parsed, or
+// output that can't be written.
 
 #include <charconv>
 #include <cmath>
@@ -210,10 +211,8 @@ int validate_plan(const std::vector<std::string_view>& args) {
   return kProblem;
 }
 
-}  // namespace
-
-int main(int argc, char** argv) {
-  const std::vector<std::string_view> all(argv + 1, argv + argc);
+// Runs one command; main() then checks the output reached its destination.
+int run(const std::vector<std::string_view>& all) {
   if (all.empty() || all[0] == "-h" || all[0] == "--help") {
     std::cout << kUsageText;
     return all.empty() ? kUsage : kOk;
@@ -243,4 +242,18 @@ int main(int argc, char** argv) {
     std::cerr << "pathfinder: " << e.what() << "\n";
     return kUsage;
   }
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+  const int status = run(std::vector<std::string_view>(argv + 1, argv + argc));
+  // A closed or full stdout must not look like success: a script redirecting gen-map into a file on a full disk
+  // would otherwise get a truncated map and status 0 (the day-1 review).
+  std::cout.flush();
+  if (!std::cout) {
+    std::cerr << "pathfinder: can't write the output\n";
+    return kUsage;
+  }
+  return status;
 }

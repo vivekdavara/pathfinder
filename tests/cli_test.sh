@@ -139,6 +139,11 @@ expect 2 "$cli" check "$data/small.map" "$data/small.scen" 4
 has "$tmp/err" "has 3 entries, not 4"
 expect 2 "$cli" check "$data/small.map"
 
+# Output that can't be written (here a closed stdout) is an error, not success.
+"$cli" gen-map empty 3 3 >&- 2> "$tmp/err"
+[ $? -eq 2 ] || fail "gen-map with a closed stdout didn't exit 2"
+is_line "$tmp/err" "pathfinder: can't write the output"
+
 if [ "$failures" -ne 0 ]; then
   echo "$failures CLI check(s) failed"
   exit 1
