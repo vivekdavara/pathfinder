@@ -142,9 +142,9 @@ examples/prioritized_vs_independent.py --agents 30 --seed 1`; CTest: `python.exa
 
 Measured on an Apple M3, macOS 26.6.2, Apple Clang 21, on battery; every number comes from the command next to it.
 
-- **Tests**: 166 CTest tests at `98f60c4` (`ctest --preset dev -N`; 100 on day 1): the main GoogleTest suite has
-  140 (88 on day 1), the day-2 reviews' 7 + 5 (and a CLI script), the pytest suite 37 tests (25), the main CLI
-  script 59 `expect` lines (39), and two examples. `make check` passes, and `make gcc-check` compiles every project
+- **Tests**: 170 CTest tests at the end of day 2 (`ctest --preset dev -N`; 100 on day 1): the main GoogleTest suite
+  has 140 (88 on day 1), the three day-2 reviews' 7 + 5 + 4 (and a CLI script), the pytest suite 46 tests (25), the
+  main CLI script 59 `expect` lines (39), and two examples. `make check` passes, and `make gcc-check` compiles every project
   file with g++-15 in Debug and Release. `make asan` at `f6849f8`: 156 of 156. `make coverage` at `f6849f8`: the four
   new source files are covered but for two lines (a check for a path of more than 2^30 steps, and an accessor only
   the Python module calls); the library as a whole 1,403 lines at 99.14%, branches 97.25%.
@@ -367,6 +367,14 @@ It found nothing in the C++ changes or the `plan` command; its clean checks (the
 every grid up to 7 x 7, the marks against a plain set model, `reserve_path` changing nothing wherever the bad step
 is, the CLI's orders and edge cases) now kill four mutants the suite had missed. As on day 1, the second round's
 bugs were all in code written after the first.
+
+A third round (at `98f60c4`, on the second round's fixes; tests in `tests/review_d2c/`, `tests/python/review_d2c/`)
+found no bug. It checked that Python really can't change an `Instance` while `prioritized_planning` runs without the
+GIL (three threads planning one instance while a fourth re-inits it and reads it: every plan equal to the one
+planned alone), and `neighbours` against coordinates on every grid up to 7 x 7 and at the corners of a 10,000 x
+10,000 grid; one of its checks kills a mutant (dropping the off-grid test in `direction_or_none`) that all 166 tests
+had let through. CI's GCC job then failed to compile one of the second round's tests: casts between `uint64_t` and
+`size_t`, the same type on Linux and different types on macOS, where `make gcc-check` runs (`ca700fa`).
 
 ## Design decisions
 

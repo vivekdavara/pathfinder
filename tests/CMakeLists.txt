@@ -53,3 +53,10 @@ pathfinder_set_warnings(pathfinder_review_d2b_tests)
 gtest_discover_tests(pathfinder_review_d2b_tests DISCOVERY_MODE PRE_TEST TEST_PREFIX "review_d2b.")
 add_test(NAME review_d2b.cli COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/review_d2b/cli_review_d2b_test.sh
   $<TARGET_FILE:pathfinder_cli>)
+
+# The day-2 third review's tests (tests/review_d2c/, at 98f60c4): all ReviewD2cClean, checks that passed there (it
+# found no bug). Its Python checks are in tests/python/review_d2c/.
+add_executable(pathfinder_review_d2c_tests review_d2c/review_d2c_test.cpp)
+target_link_libraries(pathfinder_review_d2c_tests PRIVATE pathfinder::pathfinder GTest::gtest_main)
+pathfinder_set_warnings(pathfinder_review_d2c_tests)
+gtest_discover_tests(pathfinder_review_d2c_tests DISCOVERY_MODE PRE_TEST TEST_PREFIX "review_d2c.")
