@@ -419,7 +419,10 @@ void bind_planners(py::module_& m) {
           throw py::value_error("the reservation table was made for a grid of another size");
         }
         const SearchLimits limits = search_limits(max_expansions, time_limit);
-        py::gil_scoped_release release;
+        // The search keeps the GIL: `g` and `table` are ordinary mutable Python objects, and with the GIL released
+        // another thread could change them mid-search (a forbid_vertex rehashing the set the search is reading
+        // crashed the interpreter: the day-2 second review). prioritized_planning can release it, because an
+        // Instance can't be changed from Python.
         return space_time_astar(g, start, goal, table, limits);
       },
       "grid"_a, "start"_a, "goal"_a, "table"_a, "max_expansions"_a = 0, "time_limit"_a = 0.0,
@@ -450,7 +453,7 @@ void bind_planners(py::module_& m) {
         if (order && order->empty() && !instance.agents.empty()) {
           throw py::value_error("an empty order for " + std::to_string(instance.agents.size()) + " agents");
         }
-        py::gil_scoped_release release;
+        py::gil_scoped_release release;  // safe: Python has no way to change an Instance (grid and agents are copies)
         return prioritized_planning(instance, limits, o);
       },
       "instance"_a, "max_expansions"_a = 0, "time_limit"_a = 0.0, "order"_a = py::none(),
