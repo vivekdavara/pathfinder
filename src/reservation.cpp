@@ -76,6 +76,14 @@ void ReservationTable::reserve_path(const Path& path) {
   if (path.size() - 1 > kMaxTime) {
     throw std::invalid_argument("reserve_path: a path longer than the latest allowed time");
   }
+  // Check every cell and step first, so a bad path changes nothing.
+  for (std::size_t t = 0; t < path.size(); ++t) {
+    check(path[t], 0);
+    if (t + 1 < path.size() && path[t] != path[t + 1]) {
+      check(path[t + 1], 0);
+      direction(path[t], path[t + 1]);
+    }
+  }
   for (std::size_t t = 0; t + 1 < path.size(); ++t) {
     const auto time = static_cast<std::uint32_t>(t);
     forbid_vertex(path[t], time);

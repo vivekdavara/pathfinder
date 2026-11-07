@@ -162,5 +162,22 @@ TEST(ReservationTable, ReservesAOneCellPathAsARestFromTimeZero) {
   EXPECT_THROW(r.reserve_path({}), std::invalid_argument);
 }
 
+TEST(ReservationTable, ABadPathChangesNothing) {
+  const Grid g(4, 3);
+  ReservationTable r(g);
+  EXPECT_THROW(r.reserve_path({0, 1, 2, 3, 4}), std::invalid_argument);  // 3 -> 4 wraps to the next row
+  EXPECT_THROW(r.reserve_path({0, 1, 13}), std::out_of_range);           // off the grid
+  EXPECT_THROW(r.reserve_path({0, 0, 5}), std::invalid_argument);        // a diagonal
+  EXPECT_TRUE(r.empty());
+  EXPECT_EQ(r.horizon(), 0U);
+}
+
+TEST(ReservationTable, KnowsWhichGridsItFits) {
+  const ReservationTable r(Grid(4, 3));
+  EXPECT_TRUE(r.fits(Grid(4, 3)));
+  EXPECT_FALSE(r.fits(Grid(3, 4)));  // same cell count, different rows
+  EXPECT_FALSE(r.fits(Grid(4, 4)));
+}
+
 }  // namespace
 }  // namespace pathfinder

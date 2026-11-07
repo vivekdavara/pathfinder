@@ -33,8 +33,10 @@ class ReservationTable {
   // Forbidding a cell from two times keeps the earlier.
   void forbid_from(CellId cell, std::uint32_t t);
   // Reserves another agent's path (DESIGN.md "The model"): its cell at each time; the reverse of each of its moves,
-  // so the two can't swap; and its last cell from its last time on, where it stays after its path ends.
-  // Precondition: a non-empty path of legal steps.
+  // so the two can't swap; and its last cell from its last time on, where it stays after its path ends. Throws, and
+  // changes nothing, for an empty path, one longer than kMaxTime, a cell outside the grid (std::out_of_range) or a
+  // step that is neither a wait nor a move to a 4-neighbour (std::invalid_argument). (Whether the cells are passable
+  // is the grid's business; the table doesn't keep it.)
   void reserve_path(const Path& path);
 
   // Whether the agent may be in `cell` at time t.
@@ -50,6 +52,10 @@ class ReservationTable {
   // From horizon() + 1 on nothing changes with time any more, which is what bounds the search.
   std::uint32_t horizon() const { return horizon_; }
   bool empty() const { return vertices_.empty() && moves_.empty() && from_.empty(); }
+  // The number of cells of the grid it was made for.
+  std::size_t cell_count() const { return cells_; }
+  // Whether this table was made for a grid of g's size (searches need the table and the grid to agree).
+  bool fits(const Grid& g) const { return g.width() == width_ && g.cell_count() == cells_; }
   // The number of entries of each kind (a forbid_from counts once per cell).
   std::size_t vertex_count() const { return vertices_.size(); }
   std::size_t move_count() const;
