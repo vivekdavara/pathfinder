@@ -34,8 +34,9 @@ class PassableIndex {
   const std::array<std::uint32_t, 4>& neighbors(std::uint32_t i) const { return neighbors_[i]; }
   // The memory the index holds (4 bytes per cell, and 20 per passable cell).
   std::size_t bytes() const;
-  // Whether this is g's index: the same width and cell count, and exactly g's passable cells. O(passable cells): the
-  // same number of cells, all of them passable in g, is the same set.
+  // Whether this is g's index: the same width and cell count, and exactly g's passable cells (the same number of
+  // cells, all of them passable in g, is the same set). O(cells) to count g's passable cells (a scan of a byte per
+  // cell), then O(passable cells).
   bool fits(const Grid& g) const;
 
  private:

@@ -57,6 +57,8 @@ class ReservationTable {
   // From horizon() + 1 on nothing changes with time any more, which is what bounds the search.
   std::uint32_t horizon() const { return horizon_; }
   bool empty() const { return vertices_.empty() && moves_.empty() && from_.empty(); }
+  // Whether a and b are 4-neighbours on the grid it was made for (false for a cell outside it).
+  bool neighbours(CellId a, CellId b) const { return direction_or_none(a, b) != kNoDirection; }
   // The number of cells of the grid it was made for.
   std::size_t cell_count() const { return cells_; }
   // Whether this table was made for a grid of g's size (searches need the table and the grid to agree).
@@ -81,6 +83,9 @@ class ReservationTable {
   static std::uint64_t key(CellId cell, std::uint32_t t) { return (std::uint64_t{t} << 32) | cell; }
   // The direction of the move from -> to (0 north, 1 east, 2 south, 3 west); throws unless they are 4-neighbours.
   unsigned direction(CellId from, CellId to) const;
+  // The same, or kNoDirection (also for a cell outside the grid).
+  static constexpr unsigned kNoDirection = 4;
+  unsigned direction_or_none(CellId from, CellId to) const;
   void check(CellId cell, std::uint32_t t) const;
   bool cell_free(CellId cell, std::uint32_t t) const;
   bool move_allowed(CellId from, CellId to, std::uint32_t t) const;

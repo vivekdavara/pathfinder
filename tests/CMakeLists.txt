@@ -44,3 +44,12 @@ add_executable(pathfinder_review_d2_tests review_d2/review_d2_test.cpp)
 target_link_libraries(pathfinder_review_d2_tests PRIVATE pathfinder::pathfinder GTest::gtest_main)
 pathfinder_set_warnings(pathfinder_review_d2_tests)
 gtest_discover_tests(pathfinder_review_d2_tests DISCOVERY_MODE PRE_TEST TEST_PREFIX "review_d2.")
+
+# The day-2 second review's tests (tests/review_d2b/, at 4db3e63): all ReviewD2bClean (C++ and CLI), checks that
+# passed there. Its two bugs are pytest tests in tests/python/review_d2b/, each failing at 4db3e63.
+add_executable(pathfinder_review_d2b_tests review_d2b/review_d2b_test.cpp)
+target_link_libraries(pathfinder_review_d2b_tests PRIVATE pathfinder::pathfinder GTest::gtest_main)
+pathfinder_set_warnings(pathfinder_review_d2b_tests)
+gtest_discover_tests(pathfinder_review_d2b_tests DISCOVERY_MODE PRE_TEST TEST_PREFIX "review_d2b.")
+add_test(NAME review_d2b.cli COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/review_d2b/cli_review_d2b_test.sh
+  $<TARGET_FILE:pathfinder_cli>)

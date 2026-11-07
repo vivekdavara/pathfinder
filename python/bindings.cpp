@@ -374,6 +374,12 @@ void bind_planners(py::module_& m) {
           [](const ReservationTable& r, CellId from, CellId to, std::uint32_t t) {
             check_table_cell(r, from);
             check_table_cell(r, to);
+            // C++ makes this a precondition; checked here, the answer can't depend on what else the table holds
+            // (the per-cell marks skip the direction check for a cell with no move entries: the day-2 second review).
+            if (!r.neighbours(from, to)) {
+              throw py::value_error("a move from cell " + std::to_string(from) + " to cell " + std::to_string(to) +
+                                    ", which aren't 4-neighbours");
+            }
             return r.move_free(from, to, t);
           },
           "from_cell"_a, "to_cell"_a, "t"_a)

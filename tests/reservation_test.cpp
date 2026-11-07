@@ -172,6 +172,20 @@ TEST(ReservationTable, ABadPathChangesNothing) {
   EXPECT_EQ(r.horizon(), 0U);
 }
 
+TEST(ReservationTable, KnowsWhichCellsAreNeighbours) {
+  const ReservationTable r(Grid(4, 3));
+  EXPECT_TRUE(r.neighbours(1, 2));
+  EXPECT_TRUE(r.neighbours(2, 1));
+  EXPECT_TRUE(r.neighbours(1, 5));
+  EXPECT_TRUE(r.neighbours(5, 1));
+  EXPECT_FALSE(r.neighbours(3, 4));  // consecutive ids across a row's end
+  EXPECT_FALSE(r.neighbours(4, 3));
+  EXPECT_FALSE(r.neighbours(1, 1));
+  EXPECT_FALSE(r.neighbours(0, 5));  // a diagonal
+  EXPECT_FALSE(r.neighbours(9, 13));  // "south" of the last row
+  EXPECT_FALSE(r.neighbours(12, 11));
+}
+
 TEST(ReservationTable, KnowsWhichGridsItFits) {
   const ReservationTable r(Grid(4, 3));
   EXPECT_TRUE(r.fits(Grid(4, 3)));

@@ -21,7 +21,10 @@ void ReservationTable::check(CellId cell, std::uint32_t t) const {
   }
 }
 
-unsigned ReservationTable::direction(CellId from, CellId to) const {
+unsigned ReservationTable::direction_or_none(CellId from, CellId to) const {
+  if (from >= cells_ || to >= cells_) {
+    return kNoDirection;
+  }
   const auto w = static_cast<CellId>(width_);
   const CellId x = from % w;
   if (from >= w && to == from - w) {
@@ -30,11 +33,19 @@ unsigned ReservationTable::direction(CellId from, CellId to) const {
   if (x + 1 < w && to == from + 1) {
     return 1;
   }
-  if (to == from + w) {  // to < cells_ was checked: a row below exists
+  if (to == from + w) {  // to < cells_: a row below exists
     return 2;
   }
   if (x > 0 && to == from - 1) {
     return 3;
+  }
+  return kNoDirection;
+}
+
+unsigned ReservationTable::direction(CellId from, CellId to) const {
+  const unsigned d = direction_or_none(from, to);
+  if (d != kNoDirection) {
+    return d;
   }
   throw std::invalid_argument("a move from cell " + std::to_string(from) + " to cell " + std::to_string(to) +
                               ", which aren't 4-neighbours");
