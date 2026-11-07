@@ -173,13 +173,15 @@ found no path around the ones planned before it.
   maps (warehouse-20-40-10-2-2 has 55,760 cells: 223 KB an agent, 223 MB for 1,000) but not on the largest
   benchmark map (orz900d, 978,096 cells of which only 96,603 are passable: 3.9 GB for 1,000 agents).
   **Day 2's choice: tables by passable cell** (`heuristic.hpp`). A `PassableIndex` numbers a grid's passable cells
-  once (4 bytes per cell plus 4 per passable cell, shared by every table of the grid) and a `DistanceTable` holds 4
-  bytes per passable cell. On orz900d that is 386 KB a table instead of 3.9 MB (386 MB for 1,000 agents, plus a
-  4.3 MB index); the price is one more memory read per lookup: building a table takes 12% longer on orz900d and
-  warehouse-20-40-10-2-2, 25% on den520d and 31% on a synthetic 1,024 x 1,024 map (`make bench`, README "Results
-  (day 2)"), a one-off cost per agent (0.71 ms on orz900d). Prioritized
-  planning builds each agent's table when its turn comes and drops it after (one table in memory at a time); CBS,
-  which replans any agent at any node, will keep one per agent, which is where the tenfold saving matters.
+  once and lists each one's passable neighbours by number (4 bytes per cell plus 20 per passable cell, shared by
+  every table of the grid); a `DistanceTable` holds 4 bytes per passable cell. On orz900d that is 386 KB a table
+  instead of 3.9 MB (386 MB for 1,000 agents, plus a 5.8 MB index). A first version looked each neighbour's number
+  up in the index during the BFS and was 12% to 31% *slower* to build than a table of every cell; with the
+  neighbour lists the BFS never leaves passable numbers and is 1.2x to 2.3x *faster* (0.362 ms against 0.645 ms on
+  orz900d, 0.076 ms against 0.139 ms on den520d; `make bench`, README "Results (day 2)"). A lookup during the
+  search still costs one more memory read (cell → number) than a table of every cell. Prioritized planning builds
+  each agent's table when its turn comes and drops it after (one table in memory at a time); CBS, which replans
+  any agent at any node, will keep one per agent, which is where the tenfold saving matters.
 - **The reservation table** (`reservation.hpp`) is written from the searching agent's side: every entry forbids that
   agent something. Three kinds: a cell at a time t; a move u → v between t and t + 1 (stored as a bit per direction
   under (u, t)); and a cell from a time on (another agent resting at its goal for ever). Prioritized planning turns

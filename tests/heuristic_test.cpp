@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <memory>
 #include <stdexcept>
 
@@ -27,7 +28,30 @@ TEST(PassableIndex, NumbersPassableCellsInRowMajorOrder) {
   EXPECT_EQ(index.cell(0), 0U);
   EXPECT_EQ(index.cell(1), 2U);
   EXPECT_EQ(index.cell(3), 5U);
-  EXPECT_EQ(index.bytes(), 6 * 4 + 4 * 4U);
+  EXPECT_EQ(index.bytes(), 6 * 4 + 4 * 20U);  // 4 per cell; per passable cell, its cell id and 4 neighbours
+}
+
+TEST(PassableIndex, ListsEachPassableCellsNeighboursByNumber) {
+  const Grid g = parse_map(
+      "type octile\nheight 3\nwidth 3\nmap\n"
+      ".@.\n"
+      "...\n"
+      "@..\n");
+  const PassableIndex index(g);
+  const auto none = PassableIndex::kBlocked;
+  // Numbers: (0,0) 0, (2,0) 1, (0,1) 2, (1,1) 3, (2,1) 4, (1,2) 5, (2,2) 6. Order: north, east, south, west.
+  EXPECT_EQ(index.neighbors(0), (std::array<std::uint32_t, 4>{2, none, none, none}));  // south only
+  EXPECT_EQ(index.neighbors(3), (std::array<std::uint32_t, 4>{4, 5, 2, none}));       // east, south, west
+  EXPECT_EQ(index.neighbors(4), (std::array<std::uint32_t, 4>{1, 6, 3, none}));       // north, south, west
+  EXPECT_EQ(index.neighbors(6), (std::array<std::uint32_t, 4>{4, 5, none, none}));    // north, west
+  for (std::uint32_t i = 0; i < index.size(); ++i) {
+    std::array<CellId, 4> next{};
+    const int n = g.neighbors(index.cell(i), next);
+    for (int k = 0; k < 4; ++k) {
+      const auto j = index.neighbors(i)[static_cast<std::size_t>(k)];
+      EXPECT_EQ(j, k < n ? index[next[static_cast<std::size_t>(k)]] : none) << i << " " << k;
+    }
+  }
 }
 
 TEST(PassableIndex, OfAFullyBlockedGridIsEmpty) {

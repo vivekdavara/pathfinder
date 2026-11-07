@@ -184,9 +184,11 @@ limit on it.
 
 **Why heuristic tables by passable cell?**
 DESIGN.md's budget from day 1: 4 bytes a cell is 3.9 GB for 1,000 agents on orz900d, 90% of whose cells are walls.
-`DistanceTable` stores only passable cells through a shared `PassableIndex`: a tenth of the memory there, for one
-more memory read per lookup. Prioritized planning holds one table at a time anyway; it's for CBS, which keeps one
-per agent.
+`DistanceTable` stores only passable cells through a shared `PassableIndex`: a tenth of the memory there. My first
+version was 12% to 31% slower to build than a table of every cell, because its BFS looked up every neighbour's
+number in the index; precomputing each passable cell's neighbours by number made it 1.2x to 2.3x faster than the
+all-cells BFS instead (0.36 against 0.65 ms on orz900d). Prioritized planning holds one table at a time anyway;
+it's for CBS, which keeps one per agent.
 
 ## The review
 

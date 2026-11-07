@@ -161,16 +161,21 @@ Measured on an Apple M3, macOS 26.6.2, Apple Clang 21, on battery; every number 
     instead of 8.0 to 9.0 million.
   - Prioritized planning on a random 64 x 64 map (20% blocked, 3,277 free cells): 0.474 ms for 10 agents, 18.4 ms for
     50, 27.8 ms for 100.
-  - **The heuristic tables, all cells against passable cells only** (one table, from the map's first passable cell):
+  - **The heuristic tables, all cells against passable cells only** (one table, from the map's first passable cell;
+    `make bench BENCH_ARGS="--benchmark_filter='OnMap|DistanceTable|BM_Distances/'"`, CV at most 4.5%). The first
+    version of the passable-only table (at `51b619e`) looked up each neighbour's number during its BFS; the second
+    (`PassableIndex::neighbors`) precomputes the neighbours by number:
 
-    | Map | cells / passable | all cells: time, size | passable only: time, size (+ shared index) |
-    |---|---|---|---|
-    | den520d | 65,792 / 28,178 | 0.138 ms, 263 KB | 0.173 ms, 113 KB (+ 376 KB) |
-    | warehouse-20-40-10-2-2 | 55,760 / 38,756 | 0.189 ms, 223 KB | 0.212 ms, 155 KB (+ 378 KB) |
-    | orz900d | 978,096 / 96,603 | 0.638 ms, 3.91 MB | 0.713 ms, 386 KB (+ 4.30 MB) |
-    | synthetic 1,024 x 1,024, 20% blocked | 1,048,576 / 838,861 | 8.63 ms, 4.19 MB | 11.3 ms, 3.36 MB |
+    | Map | cells / passable | all cells: time, size | passable only, first: time | passable only, now: time, size (+ shared index) |
+    |---|---|---|---|---|
+    | den520d | 65,792 / 28,178 | 0.139 ms, 263 KB | 0.173 ms | 0.076 ms, 113 KB (+ 827 KB) |
+    | warehouse-20-40-10-2-2 | 55,760 / 38,756 | 0.202 ms, 223 KB | 0.212 ms | 0.088 ms, 155 KB (+ 998 KB) |
+    | orz900d | 978,096 / 96,603 | 0.645 ms, 3.91 MB | 0.713 ms | 0.362 ms, 386 KB (+ 5.84 MB) |
+    | synthetic 1,024 x 1,024, 20% blocked | 1,048,576 / 838,861 | 8.73 ms, 4.19 MB | 11.3 ms | 7.46 ms, 3.36 MB |
 
-    12% to 31% more time per table, paid once per agent, for a tenth of the memory per agent on orz900d.
+    The first version cost 12% to 31% more time per table for a tenth of the memory on orz900d; with the neighbour
+    lists the passable-only table is both smaller and 1.2x to 2.3x faster to build. (The all-cells column is from
+    the second run; the first run's were within 3%: 0.138, 0.189, 0.638 and 8.63 ms.)
 
 ## Results (day 1)
 
@@ -293,8 +298,8 @@ chose between duplicating and dropping a line wrongly (`bdc43d0`).
   with time, so the search keys states by (cell, min(t, horizon + 1)); it then ends by running out of states, and "no
   path" is a proof, not a timeout. A brute-force oracle that uses day 1's explicit bound agrees on 6,000 problems.
 - **Heuristic tables by passable cell** (day 2): 4 bytes per passable cell instead of per cell, a tenth of the memory
-  on orz900d for a few per cent more time per table, chosen for CBS, which keeps a table per agent; prioritized
-  planning holds one at a time.
+  on orz900d, and (with the neighbours precomputed by passable number) faster to build too; chosen for CBS, which
+  keeps a table per agent; prioritized planning holds one at a time.
 - **Unsolvable instances are named up front**: a goal in another piece is `kUnreachableGoal` before any search, so a
   benchmark never spends its time limit proving it.
 - **The benchmark set is fetched, not committed**, and checked by SHA-256 before anything is unpacked; the unpacker

@@ -14,10 +14,21 @@ PassableIndex::PassableIndex(const Grid& grid) : index_(grid.cell_count(), kBloc
       cells_.push_back(c);
     }
   }
+  // Each passable cell's neighbours by number, so a search over numbers never goes back to CellIds.
+  neighbors_.resize(cells_.size());
+  std::array<CellId, 4> next{};
+  for (std::size_t i = 0; i < cells_.size(); ++i) {
+    neighbors_[i].fill(kBlocked);
+    const int n = grid.neighbors(cells_[i], next);
+    for (int k = 0; k < n; ++k) {
+      neighbors_[i][static_cast<std::size_t>(k)] = index_[next[static_cast<std::size_t>(k)]];
+    }
+  }
 }
 
 std::size_t PassableIndex::bytes() const {
-  return index_.size() * sizeof(std::uint32_t) + cells_.size() * sizeof(CellId);
+  return index_.size() * sizeof(std::uint32_t) + cells_.size() * sizeof(CellId) +
+         neighbors_.size() * sizeof(neighbors_[0]);
 }
 
 DistanceTable::DistanceTable(const Grid& grid, std::shared_ptr<const PassableIndex> index, CellId goal)
@@ -35,12 +46,12 @@ DistanceTable::DistanceTable(const Grid& grid, std::shared_ptr<const PassableInd
   queue.reserve(index_->size());
   dist_[source] = 0;
   queue.push_back(source);
-  std::array<CellId, 4> next{};
   for (std::size_t head = 0; head < queue.size(); ++head) {
     const std::uint32_t i = queue[head];
-    const int n = grid.neighbors(index_->cell(i), next);
-    for (int k = 0; k < n; ++k) {
-      const std::uint32_t j = (*index_)[next[static_cast<std::size_t>(k)]];
+    for (const std::uint32_t j : index_->neighbors(i)) {
+      if (j == PassableIndex::kBlocked) {
+        break;  // the neighbours come first, then kBlocked
+      }
       if (dist_[j] == kUnreachable) {
         dist_[j] = dist_[i] + 1;
         queue.push_back(j);

@@ -5,6 +5,7 @@
 // not; a DistanceTable stores it only for the passable cells, through a PassableIndex the tables of one grid share.
 // On orz900d, where only 96,603 of 978,096 cells are passable, that is a tenth of the memory per agent.
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -28,12 +29,16 @@ class PassableIndex {
   std::uint32_t operator[](CellId c) const { return index_[c]; }
   // The cell with number i. Precondition: i < size().
   CellId cell(std::uint32_t i) const { return cells_[i]; }
-  // The memory the index holds (4 bytes per cell, and 4 per passable cell).
+  // The numbers of cell i's passable 4-neighbours, in the grid's order (north, east, south, west), then kBlocked.
+  // Precondition: i < size().
+  const std::array<std::uint32_t, 4>& neighbors(std::uint32_t i) const { return neighbors_[i]; }
+  // The memory the index holds (4 bytes per cell, and 20 per passable cell).
   std::size_t bytes() const;
 
  private:
-  std::vector<std::uint32_t> index_;  // by CellId
-  std::vector<CellId> cells_;         // by number
+  std::vector<std::uint32_t> index_;                     // by CellId
+  std::vector<CellId> cells_;                            // by number
+  std::vector<std::array<std::uint32_t, 4>> neighbors_;  // by number
 };
 
 // One goal's heuristic: the BFS distance from every passable cell to `goal`, ignoring other agents, held by passable
