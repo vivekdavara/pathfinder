@@ -95,7 +95,7 @@ TEST(ReviewD2bClean, VertexAndMoveFreeMatchAPlainModel) {
     std::set<std::pair<CellId, std::uint32_t>> vertices;
     std::set<std::tuple<CellId, CellId, std::uint32_t>> moves;
     std::vector<std::int64_t> from(g.cell_count(), -1);
-    const auto cells = static_cast<std::uint64_t>(g.cell_count());
+    const std::uint64_t cells = g.cell_count();  // no cast: uint64_t is size_t on Linux (GCC: useless cast)
     const int ops = static_cast<int>(rng.below(12));
     for (int op = 0; op < ops; ++op) {
       const auto c = static_cast<CellId>(rng.below(cells));
@@ -109,7 +109,7 @@ TEST(ReviewD2bClean, VertexAndMoveFreeMatchAPlainModel) {
           std::array<CellId, 4> next{};
           const int n = g.neighbors(c, next);
           if (n > 0) {
-            const CellId to = next[static_cast<std::size_t>(rng.below(static_cast<std::uint64_t>(n)))];
+            const CellId to = next[rng.below(static_cast<std::uint64_t>(n))];
             table.forbid_move(c, to, t);
             moves.emplace(c, to, t);
           }
