@@ -98,8 +98,10 @@ SearchResult space_time_astar(const Grid& grid, CellId start, const DistanceTabl
     open.pop();
     const Node n = nodes[e.node];
     Seen& s = seen.find(state(n.cell, n.t))->second;
-    if (s.closed || s.t < n.t) {
-      continue;  // a stale entry: the state came off already, or was pushed again with a lower t
+    if (s.closed) {
+      // A stale entry: the state came off already. (That includes a late state pushed again with a lower t: same
+      // cell, same h, so the lower t has the lower f and came off first.)
+      continue;
     }
     if (n.cell == goal && (!goal_taken_until || n.t > *goal_taken_until)) {
       result.status = SearchStatus::kFound;

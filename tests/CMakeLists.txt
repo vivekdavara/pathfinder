@@ -12,7 +12,8 @@ add_executable(pathfinder_tests
   plan_file_test.cpp
   plan_test.cpp
   reservation_test.cpp
-  space_time_astar_test.cpp)
+  space_time_astar_test.cpp
+  space_time_oracle_test.cpp)
 target_link_libraries(pathfinder_tests PRIVATE pathfinder::pathfinder GTest::gtest_main)
 # Where the tests find their data files (tests/data) and the fetched benchmark maps (data/).
 target_compile_definitions(pathfinder_tests PRIVATE PATHFINDER_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
