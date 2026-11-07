@@ -71,7 +71,7 @@ flowchart LR
 | `python/` | the pybind11 module `pathfinder._core` and the `pathfinder` package |
 | `tests/` | GoogleTest suites, `cli_test.sh`, `python/` (pytest), `data/` (small hand-written files), `review/` (the review's tests) |
 | `scripts/` | `fetch_maps.py` (the benchmark set), `check_maps.sh`, `gcc_check.sh`, `pp_sweep.py` (prioritized planning on the benchmark maps) |
-| `examples/` | `independent_paths.py`: each agent's shortest path alone, and the conflicts the validator finds |
+| `examples/` | `independent_paths.py`: each agent's shortest path alone, and the conflicts the validator finds; `prioritized_vs_independent.py`: the same floor planned both ways, and where prioritized planning stops |
 | `bench/` | the Google Benchmark suite (`make bench`) |
 
 ## How to run
@@ -131,6 +131,12 @@ the others, and validates the result. With 40 agents on the default warehouse fl
 path is legal and shortest, so the sum of costs, 591, is the lower bound CBS starts from, and the plan has 83 vertex
 and 23 swap conflicts (`PYTHONPATH=build/dev/python .venv/bin/python examples/independent_paths.py --agents 40
 --seed 7`); with 150 agents (seed 3), 1,145 and 318. CTest runs it as `python.example`.
+
+`examples/prioritized_vs_independent.py` plans one floor both ways. With 30 agents (seed 1): independent shortest
+paths have a sum of costs of 435 (the lower bound) and 51 conflicts; prioritized planning's plan has none, at 550
+(26% over the bound), makespan 34, 3,620 expansions; and taking the first k agents of one 102-agent scenario,
+prioritized planning first fails at 43 agents, in either order (`PYTHONPATH=build/dev/python .venv/bin/python
+examples/prioritized_vs_independent.py --agents 30 --seed 1`; CTest: `python.example.prioritized`).
 
 ## Results (day 2)
 

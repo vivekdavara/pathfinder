@@ -22,4 +22,7 @@ if(PATHFINDER_BUILD_TESTS)
   add_test(NAME python.example
     COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/examples/independent_paths.py --agents 40 --seed 7)
   set_tests_properties(python.example PROPERTIES ENVIRONMENT "PYTHONPATH=${PROJECT_BINARY_DIR}/python")
+  add_test(NAME python.example.prioritized
+    COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/examples/prioritized_vs_independent.py --agents 30 --seed 1)
+  set_tests_properties(python.example.prioritized PROPERTIES ENVIRONMENT "PYTHONPATH=${PROJECT_BINARY_DIR}/python")
 endif()
