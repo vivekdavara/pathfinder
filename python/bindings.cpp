@@ -8,6 +8,7 @@
 #include <pybind11/stl/filesystem.h>
 
 #include <array>
+#include <chrono>
 #include <optional>
 #include <string>
 #include <vector>
@@ -18,6 +19,9 @@
 #include "pathfinder/instance.hpp"
 #include "pathfinder/movingai.hpp"
 #include "pathfinder/plan.hpp"
+#include "pathfinder/planner.hpp"
+#include "pathfinder/reservation.hpp"
+#include "pathfinder/space_time_astar.hpp"
 
 namespace py = pybind11;
 using namespace pybind11::literals;
@@ -317,6 +321,140 @@ void bind_plans(py::module_& m) {
         "Checks a plan (a list of paths, each a list of cell ids) by DESIGN.md's rules.");
 }
 
+void check_table_cell(const ReservationTable& r, CellId c) {
+  if (c >= r.cell_count()) {
+    throw py::index_error("cell " + std::to_string(c) + " is outside the table's grid of " +
+                          std::to_string(r.cell_count()) + " cells");
+  }
+}
+
+// A wall-time limit in seconds as SearchLimits' deadline, refusing what the planners refuse (negative, NaN).
+SearchLimits search_limits(std::uint64_t max_expansions, double time_limit) {
+  if (!(time_limit >= 0)) {
+    throw py::value_error("the time limit must be a number of seconds, 0 or more");
+  }
+  SearchLimits limits;
+  limits.max_expansions = max_expansions;
+  if (time_limit > 0 && time_limit < 1e9) {
+    limits.deadline = std::chrono::steady_clock::now() + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                                                             std::chrono::duration<double>(time_limit));
+  }
+  return limits;
+}
+
+void bind_planners(py::module_& m) {
+  py::class_<ReservationTable>(m, "ReservationTable",
+                               "What a space-time search must avoid, from the searching agent's side.")
+      .def(py::init<const Grid&>(), "grid"_a)
+      .def(
+          "forbid_vertex",
+          [](ReservationTable& r, CellId cell, std::uint32_t t) { r.forbid_vertex(cell, t); }, "cell"_a, "t"_a,
+          "The agent may not be in cell at time t.")
+      .def(
+          "forbid_move",
+          [](ReservationTable& r, CellId from, CellId to, std::uint32_t t) { r.forbid_move(from, to, t); },
+          "from_cell"_a, "to_cell"_a, "t"_a, "The agent may not move from_cell -> to_cell between t and t + 1.")
+      .def(
+          "forbid_from",
+          [](ReservationTable& r, CellId cell, std::uint32_t t) { r.forbid_from(cell, t); }, "cell"_a, "t"_a,
+          "The agent may not be in cell at time t or later.")
+      .def("reserve_path", &ReservationTable::reserve_path, "path"_a,
+           "Another agent's path: its cells, the reverse of its moves, its last cell for ever after.")
+      .def(
+          "vertex_free",
+          [](const ReservationTable& r, CellId cell, std::uint32_t t) {
+            check_table_cell(r, cell);
+            return r.vertex_free(cell, t);
+          },
+          "cell"_a, "t"_a)
+      .def(
+          "move_free",
+          [](const ReservationTable& r, CellId from, CellId to, std::uint32_t t) {
+            check_table_cell(r, from);
+            check_table_cell(r, to);
+            return r.move_free(from, to, t);
+          },
+          "from_cell"_a, "to_cell"_a, "t"_a)
+      .def(
+          "last_vertex_time",
+          [](const ReservationTable& r, CellId cell) {
+            check_table_cell(r, cell);
+            return r.last_vertex_time(cell);
+          },
+          "cell"_a)
+      .def(
+          "forbidden_from",
+          [](const ReservationTable& r, CellId cell) {
+            check_table_cell(r, cell);
+            return r.forbidden_from(cell);
+          },
+          "cell"_a)
+      .def_property_readonly("horizon", &ReservationTable::horizon)
+      .def_property_readonly("empty", &ReservationTable::empty)
+      .def("__repr__", [](const ReservationTable& r) {
+        return "ReservationTable(" + std::to_string(r.vertex_count()) + " vertex, " + std::to_string(r.move_count()) +
+               " move, " + std::to_string(r.from_count()) + " from-on entries; horizon " +
+               std::to_string(r.horizon()) + ")";
+      });
+  m.attr("MAX_RESERVATION_TIME") = ReservationTable::kMaxTime;
+
+  py::enum_<SearchStatus>(m, "SearchStatus")
+      .value("FOUND", SearchStatus::kFound)
+      .value("NO_PATH", SearchStatus::kNoPath)
+      .value("LIMIT", SearchStatus::kLimit);
+  py::class_<SearchResult>(m, "SearchResult")
+      .def_readonly("status", &SearchResult::status)
+      .def_readonly("path", &SearchResult::path)
+      .def_readonly("expansions", &SearchResult::expansions)
+      .def_readonly("generated", &SearchResult::generated);
+  m.def(
+      "space_time_astar",
+      [](const Grid& g, CellId start, CellId goal, const ReservationTable& table, std::uint64_t max_expansions,
+         double time_limit) {
+        check_cell(g, start);
+        check_cell(g, goal);
+        if (!table.fits(g)) {
+          throw py::value_error("the reservation table was made for a grid of another size");
+        }
+        const SearchLimits limits = search_limits(max_expansions, time_limit);
+        py::gil_scoped_release release;
+        return space_time_astar(g, start, goal, table, limits);
+      },
+      "grid"_a, "start"_a, "goal"_a, "table"_a, "max_expansions"_a = 0, "time_limit"_a = 0.0,
+      "The earliest-arriving path from start to goal that the table allows (0: no limit).");
+
+  py::enum_<PlanStatus>(m, "PlanStatus")
+      .value("SOLVED", PlanStatus::kSolved)
+      .value("UNREACHABLE_GOAL", PlanStatus::kUnreachableGoal)
+      .value("NO_PATH", PlanStatus::kNoPath)
+      .value("LIMIT", PlanStatus::kLimit);
+  py::class_<PlanResult>(m, "PlanResult")
+      .def_readonly("status", &PlanResult::status)
+      .def_readonly("plan", &PlanResult::plan)
+      .def_readonly("failed_agent", &PlanResult::failed_agent)
+      .def_readonly("sum_of_costs", &PlanResult::sum_of_costs)
+      .def_readonly("makespan", &PlanResult::makespan)
+      .def_readonly("expansions", &PlanResult::expansions)
+      .def_readonly("seconds", &PlanResult::seconds)
+      .def_property_readonly("solved", [](const PlanResult& r) { return r.status == PlanStatus::kSolved; });
+  m.def(
+      "prioritized_planning",
+      [](const Instance& instance, std::uint64_t max_expansions, double time_limit,
+         const std::optional<std::vector<std::size_t>>& order) {
+        PlannerLimits limits;
+        limits.max_expansions = max_expansions;
+        limits.time_limit_seconds = time_limit;
+        const std::vector<std::size_t> o = order.value_or(std::vector<std::size_t>{});
+        if (order && order->empty() && !instance.agents.empty()) {
+          throw py::value_error("an empty order for " + std::to_string(instance.agents.size()) + " agents");
+        }
+        py::gil_scoped_release release;
+        return prioritized_planning(instance, limits, o);
+      },
+      "instance"_a, "max_expansions"_a = 0, "time_limit"_a = 0.0, "order"_a = py::none(),
+      "Prioritized planning: agents one at a time in `order` (default: the instance's), each around those before.");
+}
+
 }  // namespace
 }  // namespace pathfinder
 
@@ -328,4 +466,5 @@ PYBIND11_MODULE(_core, m) {
   pathfinder::bind_instances(m);
   pathfinder::bind_generators(m);
   pathfinder::bind_plans(m);
+  pathfinder::bind_planners(m);
 }
