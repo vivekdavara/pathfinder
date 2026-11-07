@@ -38,3 +38,9 @@ gtest_discover_tests(pathfinder_review2_tests DISCOVERY_MODE PRE_TEST TEST_PREFI
 # The CLI's outputs and exit codes.
 add_test(NAME cli COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/cli_test.sh $<TARGET_FILE:pathfinder_cli>
   ${CMAKE_CURRENT_SOURCE_DIR}/data)
+
+# The day-2 review's tests (tests/review_d2/): each outside ReviewD2Clean failed at the commit it reviewed (5089fd9).
+add_executable(pathfinder_review_d2_tests review_d2/review_d2_test.cpp)
+target_link_libraries(pathfinder_review_d2_tests PRIVATE pathfinder::pathfinder GTest::gtest_main)
+pathfinder_set_warnings(pathfinder_review_d2_tests)
+gtest_discover_tests(pathfinder_review_d2_tests DISCOVERY_MODE PRE_TEST TEST_PREFIX "review_d2.")

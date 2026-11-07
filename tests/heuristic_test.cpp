@@ -103,6 +103,20 @@ TEST(DistanceTable, HoldsFourBytesPerPassableCell) {
   EXPECT_EQ(g.passable_count(), 600U);  // exactly half of 1,200: random_map blocks round(n * percent / 100) cells
 }
 
+TEST(PassableIndex, FitsOnlyItsOwnGrid) {
+  Grid g(4, 4);
+  g.set_passable(Point{0, 0}, false);
+  const PassableIndex index(g);
+  EXPECT_TRUE(index.fits(g));
+  Grid same_count(4, 4);
+  same_count.set_passable(Point{3, 3}, false);
+  EXPECT_FALSE(index.fits(same_count));  // 15 passable cells too, but another one blocked
+  Grid other_shape(8, 2);
+  other_shape.set_passable(Point{0, 0}, false);
+  EXPECT_FALSE(index.fits(other_shape));  // the same cells by id, other rows
+  EXPECT_FALSE(index.fits(Grid(4, 4)));
+}
+
 TEST(DistanceTable, RefusesAnIndexOfAnotherGrid) {
   const Grid g(4, 4);
   Grid other(4, 4);

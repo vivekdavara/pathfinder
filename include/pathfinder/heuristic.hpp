@@ -34,8 +34,12 @@ class PassableIndex {
   const std::array<std::uint32_t, 4>& neighbors(std::uint32_t i) const { return neighbors_[i]; }
   // The memory the index holds (4 bytes per cell, and 20 per passable cell).
   std::size_t bytes() const;
+  // Whether this is g's index: the same width and cell count, and exactly g's passable cells. O(passable cells): the
+  // same number of cells, all of them passable in g, is the same set.
+  bool fits(const Grid& g) const;
 
  private:
+  std::int32_t width_ = 0;
   std::vector<std::uint32_t> index_;                     // by CellId
   std::vector<CellId> cells_;                            // by number
   std::vector<std::array<std::uint32_t, 4>> neighbors_;  // by number
@@ -45,7 +49,8 @@ class PassableIndex {
 // number. The same values as distances(grid, goal), only stored more compactly.
 class DistanceTable {
  public:
-  // `index` must be the grid's. A blocked goal reaches nothing. Precondition: goal < grid.cell_count().
+  // `index` must be the grid's (PassableIndex::fits; std::invalid_argument otherwise). A blocked goal reaches
+  // nothing. Precondition: goal < grid.cell_count().
   DistanceTable(const Grid& grid, std::shared_ptr<const PassableIndex> index, CellId goal);
 
   CellId goal() const { return goal_; }
