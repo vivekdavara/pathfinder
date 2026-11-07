@@ -229,7 +229,7 @@ Measured on an Apple M3, macOS 26.6.2, Apple Clang 21, on battery; every number 
   (`for o in scenario shortest longest; do for n in $(seq 10); do build/release/pathfinder plan
   data/mapf-map/MAP.map data/scen-random/MAP-random-$n.scen K --order $o; done; done`; `scripts/pp_sweep.py --maps
   random-32-32-20 room-64-64-8 empty-32-32 --agents 100 200 --scenarios 1-10 --orders scenario shortest longest`
-  gives the same counts at `4f0dd28`.) Long-path agents planned first get the open floor before short-path agents
+  gives the same counts (the script as committed in `9b58cd9`; the library is unchanged since `0108b4d`).) Long-path agents planned first get the open floor before short-path agents
   park in their way; planned last, they find it blocked. Where all orders succeed, shortest-first plans are the
   closest to the bound (empty-32-32, 100 agents: SOC 1.010 x the bound against 1.141 for the scenario order and
   1.254 for longest-first; 200 agents: 1.033, 1.252, 1.376). So there is no best order, which is one argument for
