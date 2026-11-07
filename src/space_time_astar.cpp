@@ -4,6 +4,7 @@
 #include <array>
 #include <memory>
 #include <queue>
+#include <stdexcept>
 #include <unordered_map>
 #include <vector>
 
@@ -58,6 +59,9 @@ struct Mix {
 
 SearchResult space_time_astar(const Grid& grid, CellId start, const DistanceTable& h, const ReservationTable& table,
                               const SearchLimits& limits) {
+  if (!table.fits(grid)) {
+    throw std::invalid_argument("space_time_astar: the reservation table was made for a grid of another size");
+  }
   SearchResult result;
   const CellId goal = h.goal();
   // No path: the goal is unreachable even alone, someone rests on the goal for ever (so the agent could never stay

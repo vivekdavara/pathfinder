@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <memory>
+#include <stdexcept>
 
 #include "pathfinder/distance.hpp"
 #include "pathfinder/generate.hpp"
@@ -200,6 +201,12 @@ TEST(SpaceTimeAStar, GivesTheSamePathEveryTime) {
   EXPECT_EQ(a.expansions, b.expansions);
   EXPECT_EQ(a.generated, b.generated);
   EXPECT_EQ(allowed(g, r, a.path, start, goal), "");
+}
+
+TEST(SpaceTimeAStar, RefusesATableMadeForAnotherGrid) {
+  const Grid g(4, 4);
+  const ReservationTable other(Grid(8, 2));  // as many cells, other rows
+  EXPECT_THROW(space_time_astar(g, 0, 15, other), std::invalid_argument);
 }
 
 }  // namespace

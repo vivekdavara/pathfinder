@@ -7,7 +7,8 @@
 
 namespace pathfinder {
 
-ReservationTable::ReservationTable(const Grid& grid) : width_(grid.width()), cells_(grid.cell_count()) {}
+ReservationTable::ReservationTable(const Grid& grid)
+    : width_(grid.width()), cells_(grid.cell_count()), marks_(grid.cell_count(), 0) {}
 
 void ReservationTable::check(CellId cell, std::uint32_t t) const {
   if (cell >= cells_) {
@@ -42,6 +43,7 @@ unsigned ReservationTable::direction(CellId from, CellId to) const {
 void ReservationTable::forbid_vertex(CellId cell, std::uint32_t t) {
   check(cell, t);
   vertices_.insert(key(cell, t));
+  marks_[cell] |= kCellMark;
   auto [it, inserted] = last_vertex_.try_emplace(cell, t);
   if (!inserted) {
     it->second = std::max(it->second, t);
@@ -57,6 +59,7 @@ void ReservationTable::forbid_move(CellId from, CellId to, std::uint32_t t) {
   }
   const unsigned d = direction(from, to);
   moves_[key(from, t)] |= static_cast<std::uint8_t>(1U << d);
+  marks_[from] |= kMoveMark;
   horizon_ = std::max(horizon_, t + 1);
 }
 
@@ -66,6 +69,7 @@ void ReservationTable::forbid_from(CellId cell, std::uint32_t t) {
   if (!inserted) {
     it->second = std::min(it->second, t);
   }
+  marks_[cell] |= kCellMark;
   horizon_ = std::max(horizon_, t);
 }
 
@@ -94,14 +98,14 @@ void ReservationTable::reserve_path(const Path& path) {
   forbid_from(path.back(), static_cast<std::uint32_t>(path.size() - 1));
 }
 
-bool ReservationTable::vertex_free(CellId cell, std::uint32_t t) const {
+bool ReservationTable::cell_free(CellId cell, std::uint32_t t) const {
   if (const auto it = from_.find(cell); it != from_.end() && t >= it->second) {
     return false;
   }
   return !vertices_.contains(key(cell, t));
 }
 
-bool ReservationTable::move_free(CellId from, CellId to, std::uint32_t t) const {
+bool ReservationTable::move_allowed(CellId from, CellId to, std::uint32_t t) const {
   const auto it = moves_.find(key(from, t));
   return it == moves_.end() || (it->second & (1U << direction(from, to))) == 0;
 }

@@ -175,7 +175,7 @@ Measured on an Apple M3, macOS 26.6.2, Apple Clang 21, on battery; every number 
 
     The first version cost 12% to 31% more time per table for a tenth of the memory on orz900d; with the neighbour
     lists the passable-only table is both smaller and 1.2x to 2.3x faster to build. (The all-cells column is from
-    the second run; the first run's were within 3%: 0.138, 0.189, 0.638 and 8.63 ms.)
+    the second run; the first run's were within 7%: 0.138, 0.189, 0.638 and 8.63 ms.)
 
 ## Results (day 1)
 
@@ -309,8 +309,9 @@ chose between duplicating and dropping a line wrongly (`bdc43d0`).
 
 - Only the baseline planner so far: prioritized planning is neither complete nor optimal, and fails on crowded
   instances that have solutions (README "Results (day 2)"); CBS is day 3.
-- A reservation table is hash sets: with 50 planned paths in it, each expansion costs about twice as much as with an
-  empty table (`BM_SpaceTimeAStar`). Fine at day 2's sizes; a per-cell index would be the next step if it matters.
+- A reservation table is hash sets behind a byte per cell that says whether anything names the cell: with 50 planned
+  paths in it, an expansion still costs nearly twice as much as with an empty table (`BM_SpaceTimeAStar`), because
+  around planned paths most cells are named. Per-cell sorted lists of times would be the next step if it matters.
 - The time limit is checked every 1,024 expansions, so a run can overshoot it by that much work.
 - Movement is 4-connected only, with unit costs; MovingAI's terrain types other than passable/blocked (`S`, `W`) are
   folded into those two (the MAPF maps use only `.`, `@` and `T`).

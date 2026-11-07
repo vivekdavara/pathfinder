@@ -41,7 +41,8 @@ struct SearchResult {
 // `table` must be for `grid`. States are (cell, time); from table.horizon() + 1 on nothing changes with time, so
 // every later time of a cell is one state, which keeps the state space finite: (horizon + 2) x passable cells at
 // most. Ties on f = t + h are broken towards the larger t, then the earlier generated state, so the same inputs give
-// the same path everywhere. Precondition: start < grid.cell_count().
+// the same path everywhere. Throws std::invalid_argument if the table was made for a grid of another size.
+// Precondition: start < grid.cell_count().
 SearchResult space_time_astar(const Grid& grid, CellId start, const DistanceTable& h, const ReservationTable& table,
                               const SearchLimits& limits = {});
 
