@@ -142,9 +142,12 @@ examples/prioritized_vs_independent.py --agents 30 --seed 1`; CTest: `python.exa
 
 Measured on an Apple M3, macOS 26.6.2, Apple Clang 21, on battery; every number comes from the command next to it.
 
-- **Tests**: 158 CTest tests at `4db3e63` (`ctest --preset dev -N`; 100 on day 1): the main GoogleTest suite has
-  139 (88 on day 1), the day-2 review's 7, the pytest suite 32 tests (25), and the CLI script 59 `expect` lines (39).
-  `make check` passes, `make gcc-check` compiles every project file with g++-15 in Debug and Release.
+- **Tests**: 166 CTest tests at `98f60c4` (`ctest --preset dev -N`; 100 on day 1): the main GoogleTest suite has
+  140 (88 on day 1), the day-2 reviews' 7 + 5 (and a CLI script), the pytest suite 37 tests (25), the main CLI
+  script 59 `expect` lines (39), and two examples. `make check` passes, and `make gcc-check` compiles every project
+  file with g++-15 in Debug and Release. `make asan` at `f6849f8`: 156 of 156. `make coverage` at `f6849f8`: the four
+  new source files are covered but for two lines (a check for a path of more than 2^30 steps, and an accessor only
+  the Python module calls); the library as a whole 1,403 lines at 99.14%, branches 97.25%.
 - **Space-time A\* against brute force** (`tests/space_time_oracle_test.cpp`): 6,000 random problems from two
   generators agree on the earliest arrival and on "no path" (first generator: 1,768 found, 1,232 with no path, 650
   slowed by the reservations; second: 1,966, 1,034 and 427). Mutation checks (`.scratch`-only script, restored from a
@@ -349,6 +352,21 @@ pairs on grids up to 5 x 5), prioritized planning agent by agent against a brute
 biased to agents on goals and starts on other agents' goals; 60,000 once), and the A\* oracle for 150,000 rounds per
 generator. Of its 28 mutants, ten survived the suite: four were real gaps its clean tests now close (the budget
 pre-check's comparison and agent, and the tie-break by generation order), six equivalent.
+
+A second round (at `4db3e63`, asked about everything changed since the first; tests in `tests/review_d2b/` and
+`tests/python/review_d2b/`) found two more, both in the Python bindings written after the first round:
+
+4. `space_time_astar`'s binding released the GIL while the search read the grid and the reservation table, which
+   Python can change: a second thread adding entries rehashed the set under the search and crashed the interpreter
+   (9 runs of 9). The search now keeps the GIL (`2d549d2`); `prioritized_planning` still releases it, since Python
+   can't change an Instance.
+5. `move_free` from Python didn't check that the cells are neighbours, so with the new per-cell marks its answer for
+   cells across a row's end depended on unrelated entries (`98f60c4`: always a ValueError now).
+
+It found nothing in the C++ changes or the `plan` command; its clean checks (the tables against `distances()` on
+every grid up to 7 x 7, the marks against a plain set model, `reserve_path` changing nothing wherever the bad step
+is, the CLI's orders and edge cases) now kill four mutants the suite had missed. As on day 1, the second round's
+bugs were all in code written after the first.
 
 ## Design decisions
 

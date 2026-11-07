@@ -223,6 +223,13 @@ noting that as many cells, all passable in the grid, is the same set). Its stron
 table forbids exactly what `validate` calls a conflict, on 40,000 random pairs of paths. That ties the planner's
 model of the rules to the oracle's.
 
+**And the second round?**
+Two bugs, both in the Python bindings I wrote after the first round. The worse one: I released the GIL during
+`space_time_astar` for speed, but the grid and reservation table it reads are mutable Python objects, so a second
+thread calling `forbid_vertex` rehashed the hash set under the running search and crashed the interpreter from pure
+Python. The search now keeps the GIL; `prioritized_planning` can still release it because nothing in Python can
+change an `Instance`. Releasing the GIL is a promise that nobody else can touch what you're reading.
+
 **Tell me about a bug in your own test tooling.**
 Two. My first test of the bounded draw's bias used n = 2^63 + 1 and expected about half the draws above 2^63 - 1;
 but only two values lie there, so it failed on correct code. The right example is n = 3 · 2^62, where a plain modulo
