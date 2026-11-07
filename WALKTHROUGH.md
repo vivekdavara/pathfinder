@@ -213,6 +213,16 @@ fixes came from new code, which is why a second round is worth its cost. A third
 second, found three more in code written after that round (a case-folding key that still let some Greek spellings
 collide, and two regressions in the Python coordinate handling), and nothing in the parts it had already cleared.
 
+**What did the day-2 review find?**
+Three bugs, all at the edges of the contract rather than in the search: an expansion budget used up exactly
+stopped an agent that needed no expansion, because the search read "0 left" as "no limit" (now an `optional`); the
+time limit was never checked for agents that need no expansion, because only the search looked at the clock (the
+planner now checks before each agent); and `DistanceTable`'s "is this the grid's index?" check compared only counts,
+so another grid's index crashed the BFS (`PassableIndex::fits` now checks the set exactly, in O(passable cells), by
+noting that as many cells, all passable in the grid, is the same set). Its strongest clean result: the reservation
+table forbids exactly what `validate` calls a conflict, on 40,000 random pairs of paths. That ties the planner's
+model of the rules to the oracle's.
+
 **Tell me about a bug in your own test tooling.**
 Two. My first test of the bounded draw's bias used n = 2^63 + 1 and expected about half the draws above 2^63 - 1;
 but only two values lie there, so it failed on correct code. The right example is n = 3 · 2^62, where a plain modulo
@@ -221,6 +231,15 @@ And the parser robustness test chose between duplicating and dropping a line wit
 the case it was in, so it duplicated 1 time in 6 instead of half the time.
 
 ## Engineering
+
+**How did you make the planners faster, and how do you know it helped?**
+Two changes, each measured before and after. The passable-only heuristic table was first 12% to 31% slower to build
+than a plain all-cells table, because its BFS looked up every neighbour's number; precomputing neighbours by number
+made it 1.2x to 2.3x faster than all-cells. And a byte per cell in the reservation table, saying whether anything
+names the cell, lets the search skip the hash lookups for most cells: prioritized planning of 50 agents went from
+18.0-19.0 to 14.4-14.9 ms in an interleaved A/B of the two binaries (interleaved because a review agent was
+building at the same time, which would have skewed back-to-back runs). Both kept the oracle tests green, and a
+mutation check showed that forgetting any of the three marks fails 11 tests.
 
 **How do you catch platform differences?**
 CI (`.github/workflows/ci.yml`) builds and tests with GCC 14 and Clang 18 on Ubuntu and Apple Clang on macOS, plus
