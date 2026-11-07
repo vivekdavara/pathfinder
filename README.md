@@ -227,9 +227,13 @@ Measured on an Apple M3, macOS 26.6.2, Apple Clang 21, on battery; every number 
   | empty-32-32, 200 | 9 | 8 | 9 |
 
   (`for o in scenario shortest longest; do for n in $(seq 10); do build/release/pathfinder plan
-  data/mapf-map/MAP.map data/scen-random/MAP-random-$n.scen K --order $o; done; done`.) Long-path agents planned
-  first get the open floor before short-path agents park in their way; planned last, they find it blocked. So
-  there is no best order, which is one argument for CBS.
+  data/mapf-map/MAP.map data/scen-random/MAP-random-$n.scen K --order $o; done; done`; `scripts/pp_sweep.py --maps
+  random-32-32-20 room-64-64-8 empty-32-32 --agents 100 200 --scenarios 1-10 --orders scenario shortest longest`
+  gives the same counts at `4f0dd28`.) Long-path agents planned first get the open floor before short-path agents
+  park in their way; planned last, they find it blocked. Where all orders succeed, shortest-first plans are the
+  closest to the bound (empty-32-32, 100 agents: SOC 1.010 x the bound against 1.141 for the scenario order and
+  1.254 for longest-first; 200 agents: 1.033, 1.252, 1.376). So there is no best order, which is one argument for
+  CBS.
 - **What the search and the planner cost** (`make bench BENCH_ARGS="--benchmark_filter='OnMap|SpaceTime|Prioritized|DistanceTable|BM_Distances/'"`
   at `51b619e`, optimised build, medians of 5, CV at most 7.6% except prioritized planning at 50 agents, 13.8%):
   - One agent across a random 20%-blocked map (the same agent both ways): 4.57 µs (41 expansions) alone and 7.88 µs
