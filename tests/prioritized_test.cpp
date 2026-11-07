@@ -138,7 +138,7 @@ TEST(PrioritizedPlanning, ReportsAnUnreachableGoalBeforeSearching) {
   const Grid g = parse_map("type octile\nheight 2\nwidth 3\nmap\n.@.\n.@.\n");
   const Instance inst = instance_of(g, {{{0, 0}, {0, 1}}, {{2, 0}, {0, 0}}, {{0, 1}, {2, 1}}});
   const PlanResult r = prioritized_planning(inst);
-  EXPECT_EQ(r.status, PlanStatus::kUnreachable);
+  EXPECT_EQ(r.status, PlanStatus::kUnreachableGoal);
   EXPECT_EQ(r.failed_agent, 1U);  // the lowest-numbered of agents 1 and 2
   EXPECT_EQ(r.expansions, 0U);
   for (const Path& p : r.plan) {

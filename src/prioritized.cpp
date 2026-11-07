@@ -67,7 +67,7 @@ PlanResult prioritized_planning(const Instance& instance, const PlannerLimits& l
   const Components pieces = components(grid);
   for (std::size_t i = 0; i < k; ++i) {
     if (pieces.label[instance.agents[i].start] != pieces.label[instance.agents[i].goal]) {
-      return finish(PlanStatus::kUnreachable, i);
+      return finish(PlanStatus::kUnreachableGoal, i);
     }
   }
 

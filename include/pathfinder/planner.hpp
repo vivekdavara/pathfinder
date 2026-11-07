@@ -21,7 +21,7 @@ struct PlannerLimits {
 
 enum class PlanStatus {
   kSolved,       // `plan` is a valid plan
-  kUnreachable,  // some agent's goal can't be reached from its start even alone: no planner can solve it
+  kUnreachableGoal,  // some agent's goal can't be reached from its start even alone: no planner can solve it
   kNoPath,       // prioritized planning: an agent found no path around the agents planned before it
   kLimit,        // the limits stopped the planner first
 };
@@ -31,7 +31,7 @@ struct PlanResult {
   // Solved: one path per agent, in the instance's order, valid by validate(). Otherwise the paths of the agents
   // planned before the planner stopped, and empty paths for the others.
   Plan plan;
-  // Not solved: the agent the planner stopped at (kUnreachable: the lowest-numbered agent that can't reach its goal).
+  // Not solved: the agent the planner stopped at (kUnreachableGoal: the lowest-numbered agent that can't reach its goal).
   std::size_t failed_agent = 0;
   // When solved: the sum of costs and the makespan, as validate() computes them.
   std::uint64_t sum_of_costs = 0;
