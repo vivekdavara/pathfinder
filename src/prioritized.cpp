@@ -83,9 +83,7 @@ PlanResult prioritized_planning(const Instance& instance, const PlannerLimits& l
   for (const std::size_t i : order) {
     const Agent& a = instance.agents[i];
     if (limits.max_expansions != 0) {
-      if (result.expansions >= limits.max_expansions) {
-        return finish(PlanStatus::kLimit, i);
-      }
+      // What the agents before it left, possibly 0: then only an agent needing no expansion gets through.
       search.max_expansions = limits.max_expansions - result.expansions;
     }
     const DistanceTable h(grid, index, a.goal);  // this agent's turn only

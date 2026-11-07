@@ -334,7 +334,9 @@ SearchLimits search_limits(std::uint64_t max_expansions, double time_limit) {
     throw py::value_error("the time limit must be a number of seconds, 0 or more");
   }
   SearchLimits limits;
-  limits.max_expansions = max_expansions;
+  if (max_expansions != 0) {  // Python's 0 is "no limit", as in PlannerLimits
+    limits.max_expansions = max_expansions;
+  }
   if (time_limit > 0 && time_limit < 1e9) {
     limits.deadline = std::chrono::steady_clock::now() + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
                                                              std::chrono::duration<double>(time_limit));

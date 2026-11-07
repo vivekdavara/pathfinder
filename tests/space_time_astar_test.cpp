@@ -159,8 +159,19 @@ TEST(SpaceTimeAStar, StopsAtTheExpansionLimit) {
   EXPECT_EQ(s.status, SearchStatus::kLimit);
   EXPECT_EQ(s.expansions, 100U);
   EXPECT_TRUE(s.path.empty());
-  limits.max_expansions = 0;
+  limits.max_expansions.reset();
   EXPECT_EQ(space_time_astar(g, 0, goal, r, limits).status, SearchStatus::kNoPath);
+}
+
+TEST(SpaceTimeAStar, ABudgetOfZeroAllowsOnlyAStartThatIsDone) {
+  const Grid g(5, 5);
+  const ReservationTable none(g);
+  SearchLimits limits;
+  limits.max_expansions = 0;
+  const SearchResult s = space_time_astar(g, 0, 24, none, limits);
+  EXPECT_EQ(s.status, SearchStatus::kLimit);
+  EXPECT_EQ(s.expansions, 0U);
+  EXPECT_EQ(space_time_astar(g, 7, 7, none, limits).status, SearchStatus::kFound);
 }
 
 TEST(SpaceTimeAStar, StopsAtAPassedDeadlineBeforeExpandingAnything) {

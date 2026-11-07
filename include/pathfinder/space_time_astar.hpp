@@ -15,8 +15,10 @@
 namespace pathfinder {
 
 struct SearchLimits {
-  // Give up after expanding this many states (0: no limit).
-  std::uint64_t max_expansions = 0;
+  // Give up after expanding this many states; nullopt: no limit. 0 allows none, so only a search whose start passes
+  // the goal test succeeds (prioritized planning hands an agent whatever budget the agents before it left, and an
+  // agent that starts on its goal needs no expansion: the day-2 review).
+  std::optional<std::uint64_t> max_expansions;
   // Give up once the clock passes this (checked every 1,024 expansions, and before the first).
   std::optional<std::chrono::steady_clock::time_point> deadline;
 };

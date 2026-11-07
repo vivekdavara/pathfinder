@@ -120,7 +120,7 @@ SearchResult space_time_astar(const Grid& grid, CellId start, const DistanceTabl
     }
     // (The node list's indices are 32-bit: a search that would outgrow them stops as if at a limit. It would hold
     // over 48 GB of nodes first.)
-    if ((limits.max_expansions != 0 && result.expansions >= limits.max_expansions) ||
+    if ((limits.max_expansions && result.expansions >= *limits.max_expansions) ||
         nodes.size() > std::size_t{0xFFFF'FFFFU} - 5) {
       result.status = SearchStatus::kLimit;
       return result;
