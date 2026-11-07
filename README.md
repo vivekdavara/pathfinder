@@ -3,11 +3,13 @@
 Collision-free paths for many robots on a grid warehouse map at once: multi-agent path finding (MAPF) by
 conflict-based search, against prioritized planning as the baseline, in C++20 with Python bindings for experiments.
 
-**Status: day 1 of 5.** Built so far: the specification ([DESIGN.md](DESIGN.md)), the grid, the MovingAI map and
+**Status: day 2 of 5.** Built so far: the specification ([DESIGN.md](DESIGN.md)), the grid, the MovingAI map and
 scenario formats, a plan file format, seeded map and scenario generators (random and warehouse floors), BFS and
-octile distances, the plan validator every planner will be tested against, a CLI, the Python module, a script that
-fetches the MovingAI MAPF benchmark set, and CI. The planners come next: space-time A\* and prioritized planning
-(day 2), CBS (day 3), benchmarks and a step-by-step simulator (day 4), a replay visualizer and v1.0.0 (day 5).
+octile distances, the plan validator every planner is tested against, a CLI, the Python module, a script that
+fetches the MovingAI MAPF benchmark set, and CI (day 1); then space-time A\* with a reservation table, checked against
+a brute-force oracle, and prioritized planning, the baseline planner, in the library, the CLI (`pathfinder plan`)
+and Python (day 2). Next: CBS (day 3), benchmarks and a step-by-step simulator (day 4), a replay visualizer and
+v1.0.0 (day 5).
 
 ## Why
 
@@ -37,9 +39,14 @@ flowchart LR
   MAP[".map / .scen files<br/>(MovingAI)"] --> FMT["parsers and writers<br/>(movingai.cpp, plan_file.cpp)"]
   GEN["generators<br/>(empty, random, warehouse,<br/>random scenarios)"] --> GRID
   FMT --> GRID["Grid"] --> INST["Instance<br/>(first k agents)"]
-  INST --> DIST["BFS distances<br/>(the heuristic)"]
-  DIST --> PLAN["planners<br/>(day 2: space-time A*, prioritized;<br/>day 3: CBS)"]
-  PLAN --> VAL["validate<br/>(the oracle)"]
+  INST --> DIST["distance tables<br/>(the heuristic, by passable cell)"]
+  DIST --> STA["space-time A*"]
+  RES["reservation table"] --> STA
+  STA --> PP["prioritized planning<br/>(day 2)"]
+  STA --> CBS["CBS (day 3)"]
+  PP -- "each planned path" --> RES
+  PP --> VAL["validate<br/>(the oracle)"]
+  CBS --> VAL
   FMT --> VAL
   GRID --> CLI["pathfinder CLI"]
   VAL --> PY["Python module<br/>(pybind11)"]
@@ -56,10 +63,14 @@ flowchart LR
 | `include/pathfinder/distance.hpp`, `src/distance.cpp` | BFS distances (the planners' heuristic), octile distances (to check scenario files), connected pieces |
 | `include/pathfinder/rng.hpp`, `include/pathfinder/generate.hpp`, `src/generate.cpp` | SplitMix64 and the seeded generators |
 | `include/pathfinder/plan.hpp`, `src/plan.cpp`, `src/plan_file.cpp` | paths, plans, costs, `validate`, and the `.plan` format |
+| `include/pathfinder/heuristic.hpp`, `src/heuristic.cpp` | the planners' heuristic tables, by passable cell (`PassableIndex`, `DistanceTable`) |
+| `include/pathfinder/reservation.hpp`, `src/reservation.cpp` | the reservation table: what a space-time search must avoid |
+| `include/pathfinder/space_time_astar.hpp`, `src/space_time_astar.cpp` | space-time A\* |
+| `include/pathfinder/planner.hpp`, `src/prioritized.cpp` | the planners' limits and result; prioritized planning |
 | `tools/pathfinder_cli.cpp` | the `pathfinder` command |
 | `python/` | the pybind11 module `pathfinder._core` and the `pathfinder` package |
 | `tests/` | GoogleTest suites, `cli_test.sh`, `python/` (pytest), `data/` (small hand-written files), `review/` (the review's tests) |
-| `scripts/` | `fetch_maps.py` (the benchmark set), `check_maps.sh`, `gcc_check.sh` |
+| `scripts/` | `fetch_maps.py` (the benchmark set), `check_maps.sh`, `gcc_check.sh`, `pp_sweep.py` (prioritized planning on the benchmark maps) |
 | `examples/` | `independent_paths.py`: each agent's shortest path alone, and the conflicts the validator finds |
 | `bench/` | the Google Benchmark suite (`make bench`) |
 
@@ -87,11 +98,17 @@ build/dev/pathfinder gen-scen warehouse.map 20 7 > warehouse.scen
 build/dev/pathfinder check warehouse.map warehouse.scen
 build/dev/pathfinder validate tests/data/small.map tests/data/small.scen tests/data/small.plan
 build/dev/pathfinder check data/mapf-map/random-32-32-20.map data/scen-random/random-32-32-20-random-1.scen 100
+build/dev/pathfinder plan tests/data/small.map tests/data/small.scen 3 --out small.plan
+build/dev/pathfinder plan data/mapf-map/empty-32-32.map data/scen-random/empty-32-32-random-1.scen 200 --order longest
 ```
 
 `check` exits 0 when the instance is valid and every goal reachable, 1 when it isn't; `validate` exits 0 for a valid
-plan (printing its SOC and makespan) and 1 for an invalid one (printing each problem); both exit 2 on a usage error,
-a file that can't be read or parsed, or output that can't be written. From Python:
+plan (printing its SOC and makespan) and 1 for an invalid one (printing each problem); `plan` exits 0 when
+prioritized planning solves the instance (printing the SOC next to its lower bound, the sum of the agents' distances
+alone, and writing the plan to `--out` after `validate` has passed it) and 1 when it doesn't (printing which agent it
+stopped at and why); all exit 2 on a usage error, a file that can't be read or parsed, or output that can't be
+written. `plan` also takes `--order scenario|reverse|longest|shortest`, `--max-expansions N` and `--time-limit
+SECONDS`. From Python:
 
 ```python
 import pathfinder as pf                       # PYTHONPATH=build/dev/python
@@ -100,6 +117,13 @@ s = pf.random_scenario(g, 20, seed=7, map_name="warehouse.map")
 inst = pf.make_instance(g, s, 20)
 check = pf.validate(inst, [[a.start] for a in inst.agents])   # paths of one cell each
 print(check.valid, [pf.describe(p, g) for p in check.problems][:2])
+
+r = pf.prioritized_planning(inst, time_limit=10.0)            # or order=[...], max_expansions=...
+print(r.status, r.sum_of_costs, r.makespan, pf.validate(inst, r.plan).valid if r.solved else r.failed_agent)
+
+table = pf.ReservationTable(g)                                # one agent around another's path
+table.reserve_path(r.plan[0])
+print(pf.space_time_astar(g, inst.agents[1].start, inst.agents[1].goal, table).path)
 ```
 
 `examples/independent_paths.py` shows why a planner is needed: it gives each agent its own shortest path, ignoring
@@ -107,6 +131,46 @@ the others, and validates the result. With 40 agents on the default warehouse fl
 path is legal and shortest, so the sum of costs, 591, is the lower bound CBS starts from, and the plan has 83 vertex
 and 23 swap conflicts (`PYTHONPATH=build/dev/python .venv/bin/python examples/independent_paths.py --agents 40
 --seed 7`); with 150 agents (seed 3), 1,145 and 318. CTest runs it as `python.example`.
+
+## Results (day 2)
+
+Measured on an Apple M3, macOS 26.6.2, Apple Clang 21, on battery; every number comes from the command next to it.
+
+- **Space-time A\* against brute force** (`tests/space_time_oracle_test.cpp`): 6,000 random problems from two
+  generators agree on the earliest arrival and on "no path" (first generator: 1,768 found, 1,232 with no path, 650
+  slowed by the reservations; second: 1,966, 1,034 and 427). Mutation checks (`.scratch`-only script, restored from a
+  copy): dropping the move check, the wait's vertex check or the lower-time re-push of a late state each fail a test;
+  the re-push survived the first generator for 300,000 rounds and fails the second in 60. Three survivors are
+  equivalent mutants (DESIGN.md "The planners"; `b735e68`'s message says why for each).
+- **Prioritized planning** (`tests/prioritized_test.cpp`): every solved plan on 150 random instances (up to a third
+  of the free cells) is valid by `validate` with the SOC and makespan the planner reports, and never below the sum
+  of the agents' distances; 108 are solved, and all 42 others are `kNoPath`, prioritized planning's incompleteness.
+  On the default 27 x 12 warehouse floor (204 free cells) it solves seeds 1-3 at 10, 20 and 30 agents (SOC 4% to
+  52% above the lower bound) and fails 2 of 3 at 40 and all 3 at 50 and 60; the 50-agent failure (seed 1, agent 27)
+  is pinned by `FailsAtFiftyAgentsOnTheWarehouseFloor`. To reproduce:
+
+  ```bash
+  B=build/release/pathfinder; $B gen-map warehouse 3 4 5 2 1 2 > w.map
+  for k in 10 20 30 40 50 60; do for s in 1 2 3; do $B gen-scen w.map $k $s > w.scen; $B plan w.map w.scen $k; done; done
+  ```
+- **What the search and the planner cost** (`make bench BENCH_ARGS="--benchmark_filter='OnMap|SpaceTime|Prioritized|DistanceTable|BM_Distances/'"`
+  at `51b619e`, optimised build, medians of 5, CV at most 7.6% except prioritized planning at 50 agents, 13.8%):
+  - One agent across a random 20%-blocked map (the same agent both ways): 4.57 µs (41 expansions) alone and 7.88 µs
+    around 50 planned paths at 128 a side; 71.7 µs and 141 µs (576 expansions) at 512. With a table full of
+    reservations an expansion costs about twice as much (hash lookups), 4.1 to 5.2 million expansions a second
+    instead of 8.0 to 9.0 million.
+  - Prioritized planning on a random 64 x 64 map (20% blocked, 3,277 free cells): 0.474 ms for 10 agents, 18.4 ms for
+    50, 27.8 ms for 100.
+  - **The heuristic tables, all cells against passable cells only** (one table, from the map's first passable cell):
+
+    | Map | cells / passable | all cells: time, size | passable only: time, size (+ shared index) |
+    |---|---|---|---|
+    | den520d | 65,792 / 28,178 | 0.138 ms, 263 KB | 0.173 ms, 113 KB (+ 376 KB) |
+    | warehouse-20-40-10-2-2 | 55,760 / 38,756 | 0.189 ms, 223 KB | 0.212 ms, 155 KB (+ 378 KB) |
+    | orz900d | 978,096 / 96,603 | 0.638 ms, 3.91 MB | 0.713 ms, 386 KB (+ 4.30 MB) |
+    | synthetic 1,024 x 1,024, 20% blocked | 1,048,576 / 838,861 | 8.63 ms, 4.19 MB | 11.3 ms, 3.36 MB |
+
+    12% to 31% more time per table, paid once per agent, for a tenth of the memory per agent on orz900d.
 
 ## Results (day 1)
 
@@ -222,12 +286,27 @@ chose between duplicating and dropping a line wrongly (`bdc43d0`).
 - **Cells as `y * width + x` integers** inside the library and in Python, with (x, y) only in files and messages: the
   searches index arrays by cell, and the boundaries (parsers, `make_instance`, the bindings) check coordinates,
   because an id wraps silently onto the next row.
+- **The reservation table speaks for the searching agent** (day 2): every entry forbids it something (a cell at a
+  time, a move at a time, a cell from a time on), so prioritized planning's reservations and CBS's constraints are the
+  same data, and swaps are forbidden by reserving the *reverse* of each planned move.
+- **Late states are merged instead of bounding time** (day 2): after the reservation table's horizon nothing changes
+  with time, so the search keys states by (cell, min(t, horizon + 1)); it then ends by running out of states, and "no
+  path" is a proof, not a timeout. A brute-force oracle that uses day 1's explicit bound agrees on 6,000 problems.
+- **Heuristic tables by passable cell** (day 2): 4 bytes per passable cell instead of per cell, a tenth of the memory
+  on orz900d for a few per cent more time per table, chosen for CBS, which keeps a table per agent; prioritized
+  planning holds one at a time.
+- **Unsolvable instances are named up front**: a goal in another piece is `kUnreachableGoal` before any search, so a
+  benchmark never spends its time limit proving it.
 - **The benchmark set is fetched, not committed**, and checked by SHA-256 before anything is unpacked; the unpacker
   writes only `.map`/`.scen` files to plain paths under `data/`.
 
 ## Limitations
 
-- No planner yet (days 2 and 3), so no planning results.
+- Only the baseline planner so far: prioritized planning is neither complete nor optimal, and fails on crowded
+  instances that have solutions (README "Results (day 2)"); CBS is day 3.
+- A reservation table is hash sets: with 50 planned paths in it, each expansion costs about twice as much as with an
+  empty table (`BM_SpaceTimeAStar`). Fine at day 2's sizes; a per-cell index would be the next step if it matters.
+- The time limit is checked every 1,024 expansions, so a run can overshoot it by that much work.
 - Movement is 4-connected only, with unit costs; MovingAI's terrain types other than passable/blocked (`S`, `W`) are
   folded into those two (the MAPF maps use only `.`, `@` and `T`).
 - `random_scenario` and `pathfinder check` run one octile (Dijkstra) search per agent, stopped at its goal, which is

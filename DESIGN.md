@@ -171,18 +171,45 @@ found no path around the ones planned before it.
   **Its budget, measured on day 1** (`make bench`, Apple M3, on battery): one BFS over a 1,024 x 1,024 map (20%
   blocked, synthetic) takes 8.5 ms and its table, 4 bytes per cell, 4.2 MB. A table per agent is cheap on warehouse
   maps (warehouse-20-40-10-2-2 has 55,760 cells: 223 KB an agent, 223 MB for 1,000) but not on the largest
-  benchmark map (orz900d, 978,096 cells of which only 96,603 are passable: 3.9 GB for 1,000 agents). Day 2 will
-  index the tables by passable cell (a tenth of that on orz900d) or compute them on demand, and measure which.
-- **Space-time A\*** (day 2): A\* over states (cell, t), whose successors are the five actions, with f = t + h(cell).
-  A **reservation table** holds what the search must avoid: (cell, t) vertex reservations, (u → v, t) edge
-  reservations, and "from t on" reservations of cells where an earlier agent rests at its goal. Its goal test is
-  "at the goal at a time after which no reservation covers the goal", so a path never ends on a cell another agent
-  must still cross. The search space is finite: past the last timed reservation the problem is static, so a bound of
-  (last reservation time + passable cells) on t is enough, and a search that reaches it reports no path. Ties on f
-  are broken towards larger t (deeper nodes), then by insertion order, so runs are deterministic.
-- **Prioritized planning** (day 2, the baseline): agents in a fixed order (the scenario's order by default) are
-  planned one at a time with space-time A\*, each reserving its whole path, and its goal from its arrival on. Fast,
-  but neither complete (an early agent can wall in a later one) nor optimal.
+  benchmark map (orz900d, 978,096 cells of which only 96,603 are passable: 3.9 GB for 1,000 agents).
+  **Day 2's choice: tables by passable cell** (`heuristic.hpp`). A `PassableIndex` numbers a grid's passable cells
+  once (4 bytes per cell plus 4 per passable cell, shared by every table of the grid) and a `DistanceTable` holds 4
+  bytes per passable cell. On orz900d that is 386 KB a table instead of 3.9 MB (386 MB for 1,000 agents, plus a
+  4.3 MB index); the price is one more memory read per lookup: building a table takes 12% longer on orz900d and
+  warehouse-20-40-10-2-2, 25% on den520d and 31% on a synthetic 1,024 x 1,024 map (`make bench`, README "Results
+  (day 2)"), a one-off cost per agent (0.71 ms on orz900d). Prioritized
+  planning builds each agent's table when its turn comes and drops it after (one table in memory at a time); CBS,
+  which replans any agent at any node, will keep one per agent, which is where the tenfold saving matters.
+- **The reservation table** (`reservation.hpp`) is written from the searching agent's side: every entry forbids that
+  agent something. Three kinds: a cell at a time t; a move u → v between t and t + 1 (stored as a bit per direction
+  under (u, t)); and a cell from a time on (another agent resting at its goal for ever). Prioritized planning turns
+  each planned path into entries (`reserve_path`): its cell at every time before its last, the *reverse* of each of
+  its moves (so the searching agent can't swap with it; following it stays allowed), and its last cell from its last
+  time on. CBS's constraints (day 3) are the first two kinds directly. The table also keeps, per cell, the latest
+  vertex entry (for the goal test) and the **horizon**: the latest time any entry concerns (t for a cell entry, t + 1
+  for a move). Times are capped at 2^30, so every time the search computes from them fits 32 bits.
+- **Space-time A\*** (day 2, `space_time_astar.hpp`): A\* over states (cell, t), whose successors are the five
+  actions, with g = t (every action costs 1) and f = t + h(cell). Its goal test is "at the goal at a time after the
+  last vertex entry on the goal", so a path never ends on a cell another agent must still cross; a goal someone
+  rests on for ever, a goal in another piece and a start taken at t = 0 are refused before searching.
+  **Termination, revised on day 2.** Day 1 planned an explicit bound (horizon + passable cells) on t. The search
+  instead keys states by (cell, min(t, horizon + 1)): after the horizon nothing changes with time (no entry names a
+  later time, and the cells forbidden for ever stay forbidden), so every later time of a cell is the same state. A
+  late state reached again with a lower t is pushed again (A\*'s usual decrease-key; a test generator with walls the
+  heuristic can't see makes this happen, and dropping the re-push gives arrivals two steps late). The state space
+  is then finite, at most (horizon + 2) x passable cells, so the search ends by running out of states, and "no path"
+  needs no bound at all. A brute-force oracle that does use day 1's bound (and looks twice as far when it finds
+  nothing) agrees on 6,000 random problems (`tests/space_time_oracle_test.cpp`). Ties on f are broken towards larger
+  t (deeper nodes), then by generation order, so runs are deterministic. Limits: expansions, and a deadline checked
+  every 1,024 expansions and before the first.
+- **Prioritized planning** (day 2, the baseline, `planner.hpp`): agents in a fixed order (the scenario's order by
+  default; the CLI also offers its reverse and distance-based orders) are planned one at a time with space-time A\*,
+  each reserving its whole path, and its goal from its arrival on. Before any search, one `components()` pass
+  reports an agent whose goal is in another piece (`kUnreachableGoal`: no planner could solve the instance). Fast,
+  but neither complete (an early agent can wall in a later one: `kNoPath`, with the agent it stopped at) nor
+  optimal. The two ways it fails in practice, both seen on day 2: a later agent starts on an earlier agent's goal
+  and is boxed in before that agent arrives, and agents parked on their goals seal off the region a later agent's
+  goal is in.
 - **Conflict-based search, CBS** (day 3, Sharon et al., "Conflict-based search for optimal multi-agent pathfinding",
   AIJ 2015): a best-first search over a **constraint tree**. A node holds a set of constraints, one path per agent
   that satisfies its own agent's constraints (found by space-time A\* with the constraints as its table), and the SOC.
@@ -227,8 +254,9 @@ flowchart LR
   subgraph core["C++ library (pathfinder)"]
     GRID["Grid"]
     INST["Instance<br/>(first k agents)"]
-    H["BFS distances<br/>(heuristic)"]
-    STA["space-time A*<br/>+ reservation table"]
+    H["distance tables<br/>(heuristic, by passable cell)"]
+    RES["reservation table"]
+    STA["space-time A*"]
     PP["prioritized planning"]
     CBS["CBS<br/>(constraint tree)"]
     VAL["validate<br/>(the oracle)"]
@@ -244,8 +272,11 @@ flowchart LR
   GEN --> INST
   GRID --> INST
   INST --> H --> STA
+  RES --> STA
   STA --> PP
   STA --> CBS
+  PP -- "planned paths" --> RES
+  CBS -- "constraints" --> RES
   PP --> VAL
   CBS --> VAL
   core --> CLI
@@ -272,15 +303,17 @@ the start.
   pairwise check of every two agents at every time on random-walk plans.
 - Reviews (an agent in its own worktree) prove each finding with a failing test, kept in `tests/review/` and
   `tests/python/review/`; mutations of the code under test are re-run until each fails a test.
-- From day 2: every planner's every plan goes through the validator; CBS's SOC is compared with a brute-force
-  search on tiny instances, and never above prioritized planning's.
+- From day 2: every planner's every plan goes through the validator. Space-time A\* is compared with a brute-force
+  oracle (the set of cells the agent can be in at each time, from the reservation table's answers alone) on random
+  problems from two generators: its arrival must be the earliest, and "no path" exactly when there is none. CBS's
+  SOC (day 3) is compared with a brute-force search on tiny instances, and never above prioritized planning's.
 
 ## Day plan
 
 | Day | Delivers |
 |---|---|
 | 1 | this document, the CMake and pybind11 scaffold, the grid, the MovingAI map and scenario formats, the generators, BFS, the validator, the CLI, the map fetch script, CI |
-| 2 | space-time A\* with a reservation table, prioritized planning, tests |
+| 2 | space-time A\* with a reservation table, prioritized planning, heuristic tables by passable cell, `pathfinder plan`, the planner bindings, tests (a brute-force oracle for the search) |
 | 3 | CBS, tests that no plan has a vertex or edge conflict, CBS against a brute-force optimum on tiny instances |
 | 4 | benchmarks (success rate against agents, runtime, SOC against prioritized planning), the step-by-step simulator in Python |
 | 5 | a replay visualizer, README results, WALKTHROUGH.md, v1.0.0 |

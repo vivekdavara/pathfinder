@@ -1,7 +1,8 @@
 # Pathfinder: walkthrough
 
 The questions an interviewer is likely to ask about this project, with short answers that point at the code. Day 1
-covers the model, the formats, the generators and the validator; later days add the planners.
+covers the model, the formats, the generators and the validator; day 2 the single-agent search and the baseline
+planner; later days add CBS, the benchmarks and the visualizer.
 
 ## In two minutes
 
@@ -9,7 +10,9 @@ Pathfinder plans paths for many robots on one grid so that none collide: multi-a
 everything the planners will stand on: a strict reader for the MovingAI benchmark files every MAPF paper uses,
 seeded generators for random and warehouse floors, and `validate`, an independent checker that every plan from every
 planner will go through. Running the readers on the real benchmark set (690,275 start-goal pairs) turned up one wrong
-assumption of mine about the files, which is now documented, tested and handled.
+assumption of mine about the files, which is now documented, tested and handled. Day 2 added space-time A\* (one
+agent around reservations), checked against a brute-force oracle, and prioritized planning, the baseline that CBS
+will be measured against: fast, valid by construction, and visibly incomplete once the floor gets crowded.
 
 ## The model
 
@@ -131,6 +134,60 @@ To turn (x, y) into cell ids, and to refuse a cell outside the grid: as an id, (
 become (0, 1). The parser checks only the format, though; a file may hold a conflicting plan, because describing
 what's wrong with it is the validator's job.
 
+## The planners (day 2)
+
+**How does one agent avoid the others?**
+Space-time A\* (`src/space_time_astar.cpp`): A\* over (cell, time) instead of cells, where the five actions (wait,
+four moves) all cost 1, so g is just the time, and h is the agent's BFS distance to its goal ignoring everyone. What
+to avoid comes from a reservation table (`src/reservation.cpp`): cells forbidden at a time, moves forbidden at a
+time, and cells forbidden from a time on (someone parked on their goal). Successors failing either check are never
+generated.
+
+**Why is the reservation table written from the searching agent's side?**
+So both planners feed it the same way. Prioritized planning reserves each planned path as "you may not be here
+then" for every cell, "you may not make the reverse move then" for every move (that is what forbids swaps, while
+following stays legal), and "you may not be here from my arrival on" for its goal. CBS's constraints (day 3) are
+"agent a may not be in v at t" and "may not move u → v at t": the same entries, added directly.
+
+**When can a path end?**
+Only at the goal, at a time after the last vertex entry on the goal: an agent that arrives early but would be
+sitting there when someone else must pass has to step aside and come back
+(`AnAgentOnItsGoalStepsAsideForSomeonePassing`). A goal someone rests on for ever has no valid ending at all, so the search refuses it before starting.
+
+**How does space-time A\* know there's no path?**
+Day 1's design bounded the time at (horizon + passable cells), the horizon being the latest time any entry names.
+The search does something simpler: after the horizon nothing changes with time, so (c, 50) and (c, 51) have the same
+future, and it keys states by (cell, min(t, horizon + 1)). The state space is then finite, (horizon + 2) x passable
+at most, and an empty open list is a proof that no path exists. The one subtlety: a late state can be reached
+again with a *lower* time, and must then be pushed again, as in any A\* with decrease-key.
+
+**How do you know the search is right?**
+`tests/space_time_oracle_test.cpp` compares it with brute force on 6,000 random problems: the set of cells the agent
+can be in at each time, layer by layer, from the table's answers alone, up to day 1's explicit bound (and twice as
+far when it finds nothing). Same earliest arrival, same "no path". The first generator (other agents' random walks
+plus loose entries) passed a mutant that drops the lower-time re-push, even over 300,000 rounds; a second
+generator, walls that go up early on an open grid so the heuristic is badly wrong after the horizon, kills it in 60.
+Three other survivors are equivalent mutants, and I can say why for each (the commit message of `b735e68`).
+
+**How does prioritized planning work, and how does it fail?**
+`src/prioritized.cpp`: agents in a fixed order, each by space-time A\* against everything planned before, then
+reserved. It's fast but incomplete. On the default 27 x 12 warehouse floor it solves every seed I tried at 30 agents
+and fails some from 40: at 50 (seed 1), agent 27 starts in a corner on agent 17's goal and is walled in by agents
+parked before it. On the MovingAI random-32-32-20 map, scenario 1 fails at 50 agents: agent 42's goal is sealed off
+by parked agents; a brute-force search of its reservation table agrees there's no way. Another order can solve the
+same instance (`TheOtherOrderSolvesTheSameInstance`), which is why the CLI has `--order`.
+
+**Why check for unreachable goals separately?**
+An agent whose goal is in another connected piece makes the instance unsolvable for every planner. One
+`components()` pass names it (`kUnreachableGoal`) before any search, instead of letting a benchmark burn its time
+limit on it.
+
+**Why heuristic tables by passable cell?**
+DESIGN.md's budget from day 1: 4 bytes a cell is 3.9 GB for 1,000 agents on orz900d, 90% of whose cells are walls.
+`DistanceTable` stores only passable cells through a shared `PassableIndex`: a tenth of the memory there, for one
+more memory read per lookup. Prioritized planning holds one table at a time anyway; it's for CBS, which keeps one
+per agent.
+
 ## The review
 
 **How was day 1 reviewed?**
@@ -182,17 +239,6 @@ library as `pathfinder._core` with C++ exceptions mapped to Python ones (`ParseE
 `.line`) and cell ids range-checked at the boundary, so a bad index is an `IndexError`, not undefined behaviour.
 
 ## What's next
-
-**How will space-time A\* know when to give up?**
-Past the last timed reservation the problem is static, and a shortest path in a static grid has at most as many
-steps as there are passable cells, so a bound of (last reservation time + passable cells) on t is enough: a search
-that passes it reports no path (DESIGN.md "The planners").
-
-**What will the heuristic cost?**
-Measured on day 1 (`make bench`): one BFS over a 1,024 x 1,024 map takes 8.5 ms and a 4.2 MB table (4 bytes a
-cell). One table per agent is 223 MB for 1,000 agents on the largest warehouse map, but 3.9 GB on orz900d, whose
-978,096 cells are 90% blocked. So day 2 will index the tables by passable cell or compute them on demand, and
-measure which; the validator, at about 21 million agent-steps a second, won't be the bottleneck.
 
 **What's subtle about CBS and goals?**
 A vertex constraint on an agent's goal at time t means its path can't end there before t + 1, because it would then
