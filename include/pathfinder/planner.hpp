@@ -15,7 +15,8 @@ namespace pathfinder {
 struct PlannerLimits {
   // Give up after this many space-time A* expansions over the whole run (0: no limit).
   std::uint64_t max_expansions = 0;
-  // Give up after this many seconds of wall time (0, or a billion or more: no limit; negative or NaN: an error).
+  // Give up after this many seconds of wall time (0, or a billion or more: no limit; negative or NaN: an error),
+  // checked before each agent and every 1,024 expansions of its search.
   double time_limit_seconds = 0;
 };
 

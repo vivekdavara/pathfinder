@@ -82,6 +82,12 @@ PlanResult prioritized_planning(const Instance& instance, const PlannerLimits& l
   ReservationTable table(grid);
   for (const std::size_t i : order) {
     const Agent& a = instance.agents[i];
+    // The clock, before each agent: the search looks at it only before an expansion, and an agent that starts on
+    // its goal needs none, so a run of such agents (each still building a distance table) never stopped (the day-2
+    // review).
+    if (search.deadline && std::chrono::steady_clock::now() >= *search.deadline) {
+      return finish(PlanStatus::kLimit, i);
+    }
     if (limits.max_expansions != 0) {
       // What the agents before it left, possibly 0: then only an agent needing no expansion gets through.
       search.max_expansions = limits.max_expansions - result.expansions;
