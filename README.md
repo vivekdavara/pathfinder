@@ -204,6 +204,32 @@ Measured on an Apple M3, macOS 26.6.2, Apple Clang 21, on battery; every number 
   200 agents on random-32-32-20 (819 free cells) or room-64-64-8, while den520d (28,178 free cells) still solves all
   10 at 400 agents, in 10.8 s at the median. No time limit was hit. This is the baseline CBS (day 3) is measured
   against on day 4.
+- **The order matters as much as the planner** (`pathfinder plan ... --order`, at `0108b4d`, optimised build, load
+  average about 10, so the times are high; expansions don't depend on load). On den520d, scenario 1, 400 agents:
+
+  | order | SOC (lower bound 68,028) | expansions | time |
+  |---|---:|---:|---:|
+  | scenario | 72,642 | 20,751,299 | 8,114 ms |
+  | shortest first | 68,414 | 424,764 | 195 ms |
+  | longest first | 76,445 | 39,176,749 | 15,278 ms |
+
+  Shortest-first is 49x fewer expansions and 0.6% above the bound: agents with short paths arrive and park early,
+  so the reservation horizons later agents search against stay short. But on crowded maps it solves *fewer*
+  instances, and longest-first solves the most (solved of scenarios 1-10):
+
+  | map, agents | scenario | shortest first | longest first |
+  |---|---:|---:|---:|
+  | random-32-32-20, 100 | 7 | 3 | 9 |
+  | random-32-32-20, 200 | 0 | 0 | 1 |
+  | room-64-64-8, 100 | 5 | 3 | 10 |
+  | room-64-64-8, 200 | 0 | 0 | 7 |
+  | empty-32-32, 100 | 10 | 10 | 10 |
+  | empty-32-32, 200 | 9 | 8 | 9 |
+
+  (`for o in scenario shortest longest; do for n in $(seq 10); do build/release/pathfinder plan
+  data/mapf-map/MAP.map data/scen-random/MAP-random-$n.scen K --order $o; done; done`.) Long-path agents planned
+  first get the open floor before short-path agents park in their way; planned last, they find it blocked. So
+  there is no best order, which is one argument for CBS.
 - **What the search and the planner cost** (`make bench BENCH_ARGS="--benchmark_filter='OnMap|SpaceTime|Prioritized|DistanceTable|BM_Distances/'"`
   at `51b619e`, optimised build, medians of 5, CV at most 7.6% except prioritized planning at 50 agents, 13.8%):
   - One agent across a random 20%-blocked map (the same agent both ways): 4.57 µs (41 expansions) alone and 7.88 µs

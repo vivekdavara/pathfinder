@@ -177,6 +177,14 @@ parked before it. On the MovingAI random-32-32-20 map, scenario 1 fails at 50 ag
 by parked agents; a brute-force search of its reservation table agrees there's no way. Another order can solve the
 same instance (`TheOtherOrderSolvesTheSameInstance`), which is why the CLI has `--order`.
 
+**Does the order matter?**
+More than I expected, in two opposite ways (README "Results (day 2)"). On den520d with 400 agents, shortest-first
+needs 49x fewer expansions than the scenario order (0.4 M against 20.8 M; 195 ms against 8.1 s) and lands 0.6%
+above the lower bound, because short-path agents park early and keep the later agents' reservation horizons short.
+On crowded maps longest-first solves the most: room-64-64-8 at 200 agents, 7 of 10 scenarios against 0 for the
+other two orders, because long-path agents planned first get through before others park in their way. No order wins
+everywhere, which is part of the case for CBS.
+
 **Why check for unreachable goals separately?**
 An agent whose goal is in another connected piece makes the instance unsolvable for every planner. One
 `components()` pass names it (`kUnreachableGoal`) before any search, instead of letting a benchmark burn its time
