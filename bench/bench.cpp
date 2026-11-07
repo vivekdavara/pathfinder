@@ -5,11 +5,13 @@
 #include <benchmark/benchmark.h>
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "pathfinder/distance.hpp"
 #include "pathfinder/generate.hpp"
+#include "pathfinder/heuristic.hpp"
 #include "pathfinder/instance.hpp"
 #include "pathfinder/movingai.hpp"
 #include "pathfinder/plan.hpp"
@@ -44,6 +46,19 @@ void BM_Distances(benchmark::State& state) {
   state.counters["MB"] = static_cast<double>(sq.grid.cell_count() * sizeof(std::uint32_t)) / 1e6;
 }
 BENCHMARK(BM_Distances)->Arg(32)->Arg(128)->Arg(512)->Arg(1024)->Unit(benchmark::kMicrosecond);
+
+// The same search into a DistanceTable (by passable number, the index shared and built once): the planners' heuristic.
+void BM_DistanceTable(benchmark::State& state) {
+  const Square sq = square(state.range(0));
+  const auto index = std::make_shared<const PassableIndex>(sq.grid);
+  for (auto _ : state) {
+    DistanceTable t(sq.grid, index, sq.source);
+    benchmark::DoNotOptimize(t);
+  }
+  state.SetItemsProcessed(state.iterations() * static_cast<std::int64_t>(sq.grid.cell_count()));
+  state.counters["MB"] = static_cast<double>(sq.grid.passable_count() * sizeof(std::uint32_t)) / 1e6;
+}
+BENCHMARK(BM_DistanceTable)->Arg(32)->Arg(128)->Arg(512)->Arg(1024)->Unit(benchmark::kMicrosecond);
 
 void BM_OctileDistances(benchmark::State& state) {
   const Square sq = square(state.range(0));

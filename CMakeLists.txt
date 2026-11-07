@@ -29,6 +29,7 @@ add_library(pathfinder STATIC
   src/grid.cpp
   src/distance.cpp
   src/generate.cpp
+  src/heuristic.cpp
   src/instance.cpp
   src/movingai.cpp
   src/plan.cpp

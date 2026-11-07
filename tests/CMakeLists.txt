@@ -4,6 +4,7 @@ add_executable(pathfinder_tests
   benchmark_maps_test.cpp
   distance_test.cpp
   generate_test.cpp
+  heuristic_test.cpp
   grid_test.cpp
   instance_test.cpp
   movingai_test.cpp
