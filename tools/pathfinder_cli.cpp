@@ -1,11 +1,14 @@
 // pathfinder: the command-line tool over the library. Exit status 0 when all is well, 1 when `check` finds a
-// problem with the instance or `validate` one with the plan or its instance, 2 for a usage error, a file that can't
-// be read or parsed, or output that can't be written.
+// problem with the instance, `validate` one with the plan or its instance, or `plan` doesn't solve the instance; 2
+// for a usage error, a file that can't be read or parsed, or output that can't be written.
 
+#include <algorithm>
 #include <charconv>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <optional>
 #include <stdexcept>
@@ -19,6 +22,7 @@
 #include "pathfinder/instance.hpp"
 #include "pathfinder/movingai.hpp"
 #include "pathfinder/plan.hpp"
+#include "pathfinder/planner.hpp"
 #include "text.hpp"
 
 namespace pf = pathfinder;
@@ -44,7 +48,12 @@ constexpr std::string_view kUsageText =
     "      goal is reachable, and how many stated optimal lengths are the octile distance (MovingAI's convention)\n"
     "  pathfinder validate MAP SCEN PLAN\n"
     "      check a .plan file for the scenario's first k entries (k from the plan): its sum of costs and makespan,\n"
-    "      or every problem with it\n";
+    "      or every problem with it\n"
+    "  pathfinder plan MAP SCEN AGENTS [--out PLAN] [--order scenario|reverse|longest|shortest]\n"
+    "                 [--max-expansions N] [--time-limit SECONDS]\n"
+    "      plan the scenario's first AGENTS entries with prioritized planning (agents in the scenario's order,\n"
+    "      its reverse, or by distance alone, longest or shortest first; ties by scenario order) and print the\n"
+    "      outcome; when solved, the plan is checked with validate and written to PLAN if given\n";
 
 struct UsageError : std::runtime_error {
   using std::runtime_error::runtime_error;
@@ -213,6 +222,113 @@ int validate_plan(const std::vector<std::string_view>& args) {
   return kProblem;
 }
 
+// The agents in the order `name` asks for. `dist` is each agent's distance alone; ties keep the scenario's order.
+std::vector<std::size_t> agent_order(std::string_view name, const std::vector<std::uint32_t>& dist) {
+  std::vector<std::size_t> order(dist.size());
+  for (std::size_t i = 0; i < order.size(); ++i) {
+    order[i] = i;
+  }
+  if (name == "scenario") {
+    return order;
+  }
+  if (name == "reverse") {
+    std::reverse(order.begin(), order.end());
+  } else if (name == "longest") {
+    std::stable_sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) { return dist[a] > dist[b]; });
+  } else if (name == "shortest") {
+    std::stable_sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) { return dist[a] < dist[b]; });
+  } else {
+    throw UsageError("unknown order '" + std::string(name) + "' (scenario, reverse, longest or shortest)");
+  }
+  return order;
+}
+
+int plan(const std::vector<std::string_view>& args) {
+  if (args.size() < 3) {
+    throw UsageError("wrong number of arguments");
+  }
+  std::optional<std::filesystem::path> out;
+  std::string_view order_name = "scenario";
+  pf::PlannerLimits limits;
+  for (std::size_t i = 3; i < args.size(); i += 2) {
+    if (i + 1 >= args.size()) {
+      throw UsageError("option " + std::string(args[i]) + " needs a value");
+    }
+    const std::string_view value = args[i + 1];
+    if (args[i] == "--out") {
+      out = std::filesystem::path(value);
+    } else if (args[i] == "--order") {
+      order_name = value;
+    } else if (args[i] == "--max-expansions") {
+      limits.max_expansions = whole<std::uint64_t>("--max-expansions", value);
+    } else if (args[i] == "--time-limit") {
+      limits.time_limit_seconds = decimal("--time-limit", value);
+    } else {
+      throw UsageError("unknown option '" + std::string(args[i]) + "'");
+    }
+  }
+  const pf::Grid g = pf::load_map(std::filesystem::path(args[0]));
+  const pf::Scenario s = pf::load_scenario(std::filesystem::path(args[1]));
+  const auto agents = whole<std::size_t>("AGENTS", args[2]);
+  if (agents > s.entries.size()) {
+    throw UsageError("the scenario has " + std::to_string(s.entries.size()) + " entries, not " +
+                     std::to_string(agents));
+  }
+  pf::Instance inst;
+  try {
+    inst = pf::make_instance(g, s, agents);
+  } catch (const std::invalid_argument& e) {
+    std::cout << "invalid instance: " << e.what() << "\n";
+    return kProblem;
+  }
+  // Each agent's distance alone: for the order, and their sum is a lower bound on any plan's sum of costs.
+  std::vector<std::uint32_t> dist(agents);
+  std::uint64_t lower_bound = 0;
+  for (std::size_t i = 0; i < agents; ++i) {
+    dist[i] = pf::distances(g, inst.agents[i].goal)[inst.agents[i].start];
+    lower_bound += dist[i] == pf::kUnreachable ? 0 : dist[i];
+  }
+  const std::vector<std::size_t> order = agent_order(order_name, dist);
+  const pf::PlanResult r = pf::prioritized_planning(inst, limits, order);
+  const auto ms = [&r] { return std::to_string(std::llround(r.seconds * 1000)) + " ms"; };
+  const std::string stats = std::to_string(r.expansions) + " expansions, " + ms();
+  switch (r.status) {
+    case pf::PlanStatus::kSolved: {
+      const pf::PlanCheck check = pf::validate(inst, r.plan);
+      if (!check.valid() || check.sum_of_costs != r.sum_of_costs || check.makespan != r.makespan) {
+        throw std::logic_error("internal error: the planner's plan doesn't check out (" +
+                               (check.valid() ? std::string("its costs differ") : pf::describe(check.problems[0], g)) +
+                               ")");
+      }
+      std::cout << "solved " << agents << " agents: sum of costs " << r.sum_of_costs << " (lower bound "
+                << lower_bound << "), makespan " << r.makespan << ", " << stats << "\n";
+      if (out) {
+        std::ofstream file(*out, std::ios::binary);
+        file << pf::write_plan(r.plan, g);
+        file.close();
+        if (!file) {
+          throw std::runtime_error("can't write " + out->string());
+        }
+      }
+      return kOk;
+    }
+    case pf::PlanStatus::kUnreachableGoal:
+      std::cout << "not solved: agent " << r.failed_agent << " can't reach its goal even alone\n";
+      return kProblem;
+    case pf::PlanStatus::kNoPath: {
+      const auto before = static_cast<std::size_t>(
+          std::find(order.begin(), order.end(), r.failed_agent) - order.begin());
+      std::cout << "not solved: agent " << r.failed_agent << " found no path around the " << before
+                << (before == 1 ? " agent" : " agents") << " planned before it, " << stats << "\n";
+      return kProblem;
+    }
+    case pf::PlanStatus::kLimit:
+      std::cout << "not solved: stopped by a limit at agent " << r.failed_agent << ", " << stats << "\n";
+      return kProblem;
+  }
+  return kProblem;
+}
+
 // Runs one command; main() then checks the output reached its destination.
 int run(const std::vector<std::string_view>& all) {
   if (all.empty() || all[0] == "-h" || all[0] == "--help") {
@@ -235,6 +351,9 @@ int run(const std::vector<std::string_view>& all) {
     }
     if (all[0] == "validate") {
       return validate_plan(args);
+    }
+    if (all[0] == "plan") {
+      return plan(args);
     }
     throw UsageError("unknown command '" + std::string(all[0]) + "'");
   } catch (const UsageError& e) {

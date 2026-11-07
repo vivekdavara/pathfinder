@@ -143,6 +143,51 @@ expect 2 "$cli" check "$data/small.map" "$data/small.scen" 4
 has "$tmp/err" "has 3 entries, not 4"
 expect 2 "$cli" check "$data/small.map"
 
+# plan: solved (exit 0), with the plan written and valid; every order gives the same here.
+expect 0 "$cli" plan "$data/small.map" "$data/small.scen" 3 --out "$tmp/planned.plan"
+has "$tmp/out" "solved 3 agents: sum of costs 20 (lower bound 20), makespan 7, 20 expansions"
+expect 0 "$cli" validate "$data/small.map" "$data/small.scen" "$tmp/planned.plan"
+is_line "$tmp/out" "valid plan for 3 agents: sum of costs 20, makespan 7"
+for order in scenario reverse longest shortest; do
+  expect 0 "$cli" plan "$data/small.map" "$data/small.scen" 3 --order "$order" --time-limit 0
+  has "$tmp/out" "solved 3 agents: sum of costs 20"
+done
+expect 0 "$cli" plan "$data/small.map" "$data/small.scen" 0
+has "$tmp/out" "solved 0 agents: sum of costs 0 (lower bound 0), makespan 0"
+
+# plan: not solved (exit 1). A dead-end corridor off a small room: agent 0 parks half-way in before agent 1 can get
+# past it; planned the other way round, both get in.
+printf 'type octile\nheight 2\nwidth 5\nmap\n.....\n..@@@\n' > "$tmp/room.map"
+printf 'version 1\n0\troom.map\t5\t2\t1\t0\t3\t0\t2\n0\troom.map\t5\t2\t0\t1\t4\t0\t4.41421356\n' > "$tmp/room.scen"
+expect 1 "$cli" plan "$tmp/room.map" "$tmp/room.scen" 2 --out "$tmp/room.plan"
+has "$tmp/out" "not solved: agent 1 found no path around the 1 agent planned before it, "
+[ ! -e "$tmp/room.plan" ] || fail "plan wrote a plan file for an unsolved instance"
+expect 0 "$cli" plan "$tmp/room.map" "$tmp/room.scen" 2 --order reverse --out "$tmp/room.plan"
+expect 0 "$cli" validate "$tmp/room.map" "$tmp/room.scen" "$tmp/room.plan"
+printf 'type octile\nheight 1\nwidth 3\nmap\n.@.\n' > "$tmp/split.map"
+printf 'version 1\n0\tsplit.map\t3\t1\t0\t0\t2\t0\t2\n' > "$tmp/split.scen"
+expect 1 "$cli" plan "$tmp/split.map" "$tmp/split.scen" 1
+is_line "$tmp/out" "not solved: agent 0 can't reach its goal even alone"
+expect 1 "$cli" plan "$data/small.map" "$data/small.scen" 3 --max-expansions 5
+has "$tmp/out" "not solved: stopped by a limit at agent 0, 5 expansions"
+expect 1 "$cli" plan "$data/small.map" "$tmp/shared_goal.scen" 2
+has "$tmp/out" "invalid instance: "
+
+# plan: usage errors and unwritable output (exit 2).
+expect 2 "$cli" plan "$data/small.map" "$data/small.scen"
+expect 2 "$cli" plan "$data/small.map" "$data/small.scen" 4
+has "$tmp/err" "has 3 entries, not 4"
+expect 2 "$cli" plan "$data/small.map" "$data/small.scen" 3 --order random
+has "$tmp/err" "unknown order 'random'"
+expect 2 "$cli" plan "$data/small.map" "$data/small.scen" 3 --order
+has "$tmp/err" "option --order needs a value"
+expect 2 "$cli" plan "$data/small.map" "$data/small.scen" 3 --max-expansions -1
+expect 2 "$cli" plan "$data/small.map" "$data/small.scen" 3 --time-limit -1
+expect 2 "$cli" plan "$data/small.map" "$data/small.scen" 3 --verbose yes
+has "$tmp/err" "unknown option '--verbose'"
+expect 2 "$cli" plan "$data/small.map" "$data/small.scen" 3 --out "$tmp"
+has "$tmp/err" "can't write $tmp"
+
 # Output that can't be written (here a closed stdout) is an error, not success.
 "$cli" gen-map empty 3 3 >&- 2> "$tmp/err"
 [ $? -eq 2 ] || fail "gen-map with a closed stdout didn't exit 2"
