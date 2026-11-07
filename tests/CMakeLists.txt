@@ -11,6 +11,7 @@ add_executable(pathfinder_tests
   parser_robustness_test.cpp
   plan_file_test.cpp
   plan_test.cpp
+  prioritized_test.cpp
   reservation_test.cpp
   space_time_astar_test.cpp
   space_time_oracle_test.cpp)

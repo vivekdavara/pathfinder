@@ -34,6 +34,7 @@ add_library(pathfinder STATIC
   src/movingai.cpp
   src/plan.cpp
   src/plan_file.cpp
+  src/prioritized.cpp
   src/reservation.cpp
   src/space_time_astar.cpp)
 add_library(pathfinder::pathfinder ALIAS pathfinder)
