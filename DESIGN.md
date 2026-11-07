@@ -202,11 +202,14 @@ found no path around the ones planned before it.
   is then finite, at most (horizon + 2) x passable cells, so the search ends by running out of states, and "no path"
   needs no bound at all. A brute-force oracle that does use day 1's bound (and looks twice as far when it finds
   nothing) agrees on 6,000 random problems (`tests/space_time_oracle_test.cpp`). Ties on f are broken towards larger
-  t (deeper nodes), then by generation order, so runs are deterministic. Limits: expansions, and a deadline checked
-  every 1,024 expansions and before the first.
+  t (deeper nodes), then by generation order, so runs are deterministic. Limits: expansions (optional: none means no
+  limit, and 0 allows only a start that already passes the goal test), and a deadline checked every 1,024 expansions
+  and before the first.
 - **Prioritized planning** (day 2, the baseline, `planner.hpp`): agents in a fixed order (the scenario's order by
   default; the CLI also offers its reverse and distance-based orders) are planned one at a time with space-time A\*,
-  each reserving its whole path, and its goal from its arrival on. Before any search, one `components()` pass
+  each reserving its whole path, and its goal from its arrival on. Each agent's search gets the expansions the
+  agents before it left, and the planner checks the clock before each agent as well (an agent on its goal needs no
+  expansion, so the search alone would never look). Before any search, one `components()` pass
   reports an agent whose goal is in another piece (`kUnreachableGoal`: no planner could solve the instance). Fast,
   but neither complete (an early agent can wall in a later one: `kNoPath`, with the agent it stopped at) nor
   optimal. The two ways it fails in practice, both seen on day 2: a later agent starts on an earlier agent's goal

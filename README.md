@@ -136,6 +136,9 @@ and 23 swap conflicts (`PYTHONPATH=build/dev/python .venv/bin/python examples/in
 
 Measured on an Apple M3, macOS 26.6.2, Apple Clang 21, on battery; every number comes from the command next to it.
 
+- **Tests**: 158 CTest tests at `4db3e63` (`ctest --preset dev -N`; 100 on day 1): the main GoogleTest suite has
+  139 (88 on day 1), the day-2 review's 7, the pytest suite 32 tests (25), and the CLI script 59 `expect` lines (39).
+  `make check` passes, `make gcc-check` compiles every project file with g++-15 in Debug and Release.
 - **Space-time A\* against brute force** (`tests/space_time_oracle_test.cpp`): 6,000 random problems from two
   generators agree on the earliest arrival and on "no path" (first generator: 1,768 found, 1,232 with no path, 650
   slowed by the reservations; second: 1,966, 1,034 and 427). Mutation checks (`.scratch`-only script, restored from a
@@ -153,6 +156,45 @@ Measured on an Apple M3, macOS 26.6.2, Apple Clang 21, on battery; every number 
   B=build/release/pathfinder; $B gen-map warehouse 3 4 5 2 1 2 > w.map
   for k in 10 20 30 40 50 60; do for s in 1 2 3; do $B gen-scen w.map $k $s > w.scen; $B plan w.map w.scen $k; done; done
   ```
+- **Prioritized planning on the MovingAI benchmark maps** (`PYTHONPATH=build/release/python .venv/bin/python
+  scripts/pp_sweep.py --maps empty-32-32 random-32-32-20 room-64-64-8 warehouse-10-20-10-2-1 den520d --agents 50 100
+  200 300 400 --scenarios 1-10 --time-limit 30` at `4db3e63`, optimised build, load average 5.7 at the start; the
+  first k agents of each map's random scenarios 1-10; "solved" counts tries that returned a plan, every one checked
+  by `validate`; the ratio is the mean over solved tries of the SOC over the sum of the agents' distances alone):
+
+  | map | agents | solved | median time | max time | SOC / lower bound |
+  |---|---:|---:|---:|---:|---:|
+  | empty-32-32 | 50 | 10 / 10 | 4.2 ms | 10.8 ms | 1.065 |
+  | empty-32-32 | 100 | 10 / 10 | 13.2 ms | 26.8 ms | 1.141 |
+  | empty-32-32 | 200 | 9 / 10 | 48.5 ms | 70.9 ms | 1.252 |
+  | empty-32-32 | 300 | 2 / 10 | 73.5 ms | 113.5 ms | 1.345 |
+  | empty-32-32 | 400 | 0 / 10 | 74.1 ms | 135.6 ms | - |
+  | random-32-32-20 | 50 | 9 / 10 | 3.4 ms | 7.4 ms | 1.106 |
+  | random-32-32-20 | 100 | 7 / 10 | 11.8 ms | 15.6 ms | 1.201 |
+  | random-32-32-20 | 200 | 0 / 10 | 18.2 ms | 57.9 ms | - |
+  | random-32-32-20 | 300 | 0 / 10 | 18.0 ms | 120.8 ms | - |
+  | random-32-32-20 | 400 | 0 / 10 | 17.9 ms | 59.4 ms | - |
+  | room-64-64-8 | 50 | 9 / 10 | 21.2 ms | 61.7 ms | 1.082 |
+  | room-64-64-8 | 100 | 5 / 10 | 84.1 ms | 125.1 ms | 1.162 |
+  | room-64-64-8 | 200 | 0 / 10 | 127.6 ms | 438.0 ms | - |
+  | room-64-64-8 | 300 | 0 / 10 | 128.1 ms | 437.7 ms | - |
+  | room-64-64-8 | 400 | 0 / 10 | 127.1 ms | 437.5 ms | - |
+  | warehouse-10-20-10-2-1 | 50 | 10 / 10 | 50.1 ms | 90.3 ms | 1.048 |
+  | warehouse-10-20-10-2-1 | 100 | 10 / 10 | 161.1 ms | 306.3 ms | 1.084 |
+  | warehouse-10-20-10-2-1 | 200 | 7 / 10 | 735.5 ms | 880.3 ms | 1.172 |
+  | warehouse-10-20-10-2-1 | 300 | 4 / 10 | 1260.1 ms | 1817.4 ms | 1.235 |
+  | warehouse-10-20-10-2-1 | 400 | 1 / 10 | 1469.5 ms | 3090.8 ms | 1.291 |
+  | den520d | 50 | 10 / 10 | 205.4 ms | 800.6 ms | 1.021 |
+  | den520d | 100 | 10 / 10 | 533.8 ms | 1388.0 ms | 1.029 |
+  | den520d | 200 | 10 / 10 | 2901.3 ms | 5529.6 ms | 1.053 |
+  | den520d | 300 | 10 / 10 | 6310.2 ms | 10728.6 ms | 1.068 |
+  | den520d | 400 | 10 / 10 | 10810.1 ms | 14002.2 ms | 1.080 |
+
+  It fails fast and cleanly (`kNoPath` in tens of milliseconds on the small maps) and its plans are close to the
+  lower bound where it succeeds (2% to 35% above it), but its success rate collapses with crowding: none of 10 at
+  200 agents on random-32-32-20 (819 free cells) or room-64-64-8, while den520d (28,178 free cells) still solves all
+  10 at 400 agents, in 10.8 s at the median. No time limit was hit. This is the baseline CBS (day 3) is measured
+  against on day 4.
 - **What the search and the planner cost** (`make bench BENCH_ARGS="--benchmark_filter='OnMap|SpaceTime|Prioritized|DistanceTable|BM_Distances/'"`
   at `51b619e`, optimised build, medians of 5, CV at most 7.6% except prioritized planning at 50 agents, 13.8%):
   - One agent across a random 20%-blocked map (the same agent both ways): 4.57 µs (41 expansions) alone and 7.88 µs
@@ -175,7 +217,13 @@ Measured on an Apple M3, macOS 26.6.2, Apple Clang 21, on battery; every number 
 
     The first version cost 12% to 31% more time per table for a tenth of the memory on orz900d; with the neighbour
     lists the passable-only table is both smaller and 1.2x to 2.3x faster to build. (The all-cells column is from
-    the second run; the first run's were within 7%: 0.138, 0.189, 0.638 and 8.63 ms.)
+    the second run; the first run's were within 7%: 0.138, 0.189, 0.638 and 8.63 ms.) Checking that the index is
+    the grid's (`PassableIndex::fits`, after the review) costs little: 0.077, 0.096 and 0.358 ms at `4db3e63`.
+  - **A byte per cell in the reservation table** (`66cde20`) lets the search skip the hash tables for cells nothing
+    names. An interleaved A/B of the two benchmark binaries (three rounds of three repetitions, load average 5 to
+    11): prioritized planning of 50 agents 18.0-19.0 ms → 14.4-14.9 ms, of 100 agents 25.6-27.0 → 22.5-23.6 ms;
+    one agent around 50 planned paths on a 512 map 142-176 → 114-128 µs, and no change on a 128 map, where most
+    cells near the path are named.
 
 ## Results (day 1)
 
@@ -273,6 +321,28 @@ Found by my own tests: a `\r` inside a scenario line became part of a map name t
 (`d9bcff4`, the robustness test's first run); `load_scenario`'s error path was untested (`07fbfab`, from the coverage
 report); GCC 15 flagged a false maybe-uninitialized in the robustness test that Clang didn't, and the same test
 chose between duplicating and dropping a line wrongly (`bdc43d0`).
+
+## Review of day 2
+
+A review agent at `5089fd9` (its own worktree, asked for correctness bugs, each proved by a failing test before it
+was reported; tests in `tests/review_d2/`) found three, all in how limits and preconditions were handled, none in
+the search or the reservations:
+
+1. An expansion budget used up exactly stopped the next agent even when it needed no expansion (it starts on its
+   goal), so a budget equal to the unlimited run's failed (`0ff7c95`: `SearchLimits::max_expansions` is now
+   optional, so "0 left" and "no limit" differ, and the planner's pre-check is gone).
+2. The time limit was only checked by the search before an expansion, so agents needing none were planned past it:
+   80 of them on a 400 x 400 grid with a 1 ms limit came back solved after about 1.1 s (`b488aef`: the planner
+   checks the clock before each agent).
+3. `DistanceTable` claimed to refuse another grid's index but compared only the passable counts; an index of a grid
+   with as many passable cells was accepted and the BFS wrote far outside the table (`4db3e63`:
+   `PassableIndex::fits` checks the whole set, exactly, in O(passable cells)).
+
+It also checked, and found right: `reserve_path` forbids exactly what `validate` calls a conflict (40,000 random path
+pairs on grids up to 5 x 5), prioritized planning agent by agent against a brute-force oracle (6,000 instances
+biased to agents on goals and starts on other agents' goals; 60,000 once), and the A\* oracle for 150,000 rounds per
+generator. Of its 28 mutants, ten survived the suite: four were real gaps its clean tests now close (the budget
+pre-check's comparison and agent, and the tie-break by generation order), six equivalent.
 
 ## Design decisions
 
