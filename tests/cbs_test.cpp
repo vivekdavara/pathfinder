@@ -49,9 +49,12 @@ PlannerLimits node_limit(std::uint64_t nodes) {
   return limits;
 }
 
+// Every call that expects an answer still has a limit, so a broken CBS fails a test instead of hanging it.
+PlannerLimits bounded() { return node_limit(20000); }
+
 TEST(Cbs, AnInstanceWithNoAgentsIsSolved) {
   const Instance inst{Grid(3, 3), {}};
-  const PlanResult r = cbs(inst);
+  const PlanResult r = cbs(inst, bounded());
   EXPECT_EQ(r.status, PlanStatus::kSolved);
   EXPECT_TRUE(r.plan.empty());
   EXPECT_EQ(r.nodes_generated, 1U);
@@ -61,7 +64,7 @@ TEST(Cbs, AnInstanceWithNoAgentsIsSolved) {
 TEST(Cbs, AgentsThatNeverMeetKeepTheirShortestPaths) {
   const Grid g(6, 6);
   const Instance inst = instance_of(g, {{{0, 0}, {5, 0}}, {{0, 5}, {5, 5}}, {{2, 2}, {2, 2}}});
-  const PlanResult r = cbs(inst);
+  const PlanResult r = cbs(inst, bounded());
   expect_valid(inst, r);
   EXPECT_EQ(r.sum_of_costs, 10U);
   EXPECT_EQ(r.nodes_generated, 1U);  // the root has no conflict
@@ -80,7 +83,7 @@ TEST(Cbs, SolvesTheCorridorPrioritizedPlanningCant) {
   const Grid g = corridor_room();
   const Instance inst = instance_of(g, {{{1, 0}, {3, 0}}, {{0, 1}, {4, 0}}});
   ASSERT_EQ(prioritized_planning(inst).status, PlanStatus::kNoPath);
-  const PlanResult r = cbs(inst);
+  const PlanResult r = cbs(inst, bounded());
   expect_valid(inst, r);
   // Agent 1 needs 5 moves. It is on (3,0) at t >= 4, so agent 0, which must end there after agent 1 has passed, gets
   // there at t >= 5; moving aside and following it does that. 5 + 5 = 10, against 7 for the two alone.
@@ -95,7 +98,7 @@ TEST(Cbs, AnAgentOnItsGoalStepsAsideAndComesBack) {
   // agent 0 ducking into the pocket at t = 1 and following agent 1 back out at t = 2 achieves.
   const Grid g = parse_map("type octile\nheight 2\nwidth 3\nmap\n...\n@.@\n");
   const Instance inst = instance_of(g, {{{1, 0}, {1, 0}}, {{0, 0}, {2, 0}}});
-  const PlanResult r = cbs(inst);
+  const PlanResult r = cbs(inst, bounded());
   expect_valid(inst, r);
   EXPECT_EQ(r.sum_of_costs, 4U);
   EXPECT_EQ(r.makespan, 2U);
@@ -125,7 +128,7 @@ TEST(Cbs, TwoAgentsThatMustSwapInACorridorRunIntoTheLimits) {
 TEST(Cbs, ReportsAnUnreachableGoalBeforeSearching) {
   const Grid g = parse_map("type octile\nheight 2\nwidth 3\nmap\n.@.\n.@.\n");
   const Instance inst = instance_of(g, {{{0, 0}, {0, 1}}, {{2, 0}, {0, 0}}, {{0, 1}, {2, 1}}});
-  const PlanResult r = cbs(inst);
+  const PlanResult r = cbs(inst, bounded());
   EXPECT_EQ(r.status, PlanStatus::kUnreachableGoal);
   EXPECT_EQ(r.failed_agent, 1U);
   EXPECT_EQ(r.expansions, 0U);
@@ -157,13 +160,13 @@ TEST(Cbs, StopsAtTheTimeLimitBeforeTheFirstSearch) {
 TEST(Cbs, TheNodeAndExpansionLimitsAreExact) {
   const Grid g = corridor_room();
   const Instance inst = instance_of(g, {{{1, 0}, {3, 0}}, {{0, 1}, {4, 0}}});
-  const PlanResult full = cbs(inst);
+  const PlanResult full = cbs(inst, bounded());
   expect_valid(inst, full);
   ASSERT_GT(full.nodes_generated, 2U);
   // Exactly the nodes and expansions it used are enough; one fewer of either isn't.
   expect_valid(inst, cbs(inst, node_limit(full.nodes_generated)));
   EXPECT_EQ(cbs(inst, node_limit(full.nodes_generated - 1)).status, PlanStatus::kLimit);
-  PlannerLimits limits;
+  PlannerLimits limits = bounded();
   limits.max_expansions = full.expansions;
   expect_valid(inst, cbs(inst, limits));
   limits.max_expansions = full.expansions - 1;
