@@ -158,37 +158,53 @@ the command next to it.
 
 - **CBS is optimal where it can be checked.** `tests/cbs_oracle_test.cpp` compares it with a brute-force optimum
   (Dijkstra's algorithm over joint states of all the agents, written from the model alone) on 1,500 random tiny
-  instances (2 x 2 to 4 x 4 grids, 2 to 4 agents): 1,148 solvable, and CBS's SOC equals the optimum on all 1,116 it
+  instances (2 x 2 to 4 x 4 grids, 2 to 4 agents): 1,148 solvable, and CBS's SOC equals the optimum on all 1,115 it
   finishes within 3,000 nodes; 226 unsolvable, and CBS never returns a plan for one (it never proves it either: the
-  tree never runs out, so it stops at its limit). Prioritized planning is above the optimum on 114 of the solvable
-  ones and fails on 242 (`build/dev/tests/pathfinder_tests --gtest_filter=CbsOracle.*`).
-- **Its effort is all over the place.** On those tiny instances it needs a median of 3 nodes, 60 at the 90th
-  percentile and 18,894 at the 99th; the most for one it solved was 184,035, and 8 solvable ones weren't solved
-  within 200,000 (Release, the test's limit raised to 200,000 for one run, 144 s). Ten agents on the default
-  warehouse floor (`warehouse_map()`, seeds 1-5) take 8,309 / 9 / 77 / 375,673 / 14,041 nodes for SOC 163 / 123 /
-  146 / 130 / 158, against prioritized planning's 178 / 131 / 146 / 130 / 158 (Python, `pf.cbs(inst,
-  max_nodes=2_000_000, time_limit=60)`; seed 4 took 3.16 s). This is plain CBS's known weakness: many conflicts
-  whose two children cost the same, so the open list fills with ties. Choosing cardinal conflicts first is the
-  standard fix (DESIGN.md "Later refinements").
+  tree never runs out, so it stops at its limit). Prioritized planning is above the optimum on 113 of the solvable
+  ones and fails on 241 (`build/dev/tests/pathfinder_tests --gtest_filter=CbsOracle.*`, at `766d3da`; before the
+  goal bound: 1,116, 114 and 242).
+- **Its effort is all over the place.** On those tiny instances it needs a median of 3 nodes, 35 at the 90th
+  percentile and 849 at the 99th (the test's own output, 3,000-node limit). With the limit raised to 200,000 for one
+  run (Release, 144 s, before the goal bound): median 3, 90th 60, 99th 18,894, the most for one it solved 184,035,
+  and 8 solvable ones still unsolved. Ten agents on the default warehouse floor (`warehouse_map()`, seeds 1-5) take
+  8,069 / 9 / 77 / 2,675 / 14,331 nodes for SOC 163 / 123 / 146 / 130 / 158, against prioritized planning's 178 /
+  131 / 146 / 130 / 158 (Python, `pf.cbs(inst, max_nodes=2_000_000, time_limit=60)`, at most 100 ms). Before the
+  goal bound seed 4 took 375,673 nodes and 3.16 s for the same SOC: which of several equally short paths the low
+  level returns changes the whole tree. This is plain CBS's known weakness: many conflicts whose two children cost
+  the same, so the open list fills with ties. Choosing cardinal conflicts first is the standard fix (DESIGN.md
+  "Later refinements").
+- **The goal bound in space-time A\*** (`766d3da`). On orz900d, CBS with 10 agents (scenario 2) built 2 tree nodes
+  but made 36,416,522 low-level expansions and stopped at its 20 s limit (after 22.5 s). A constraint on an agent's
+  goal far in the future, from another agent passing it late, forbids ending early; the heuristic didn't know, so
+  the search tried every detour that ends too early. With f = max(t + h, the goal's last entry + 1) the same run
+  takes 12 ms (3 nodes, 15,694 expansions, SOC 10,868, the lower bound), 20 agents on scenario 2 solve in 9.2 s,
+  and a test's goal ten cells away taken at t = 500 costs 501 expansions instead of 1,408,200
+  (`build/release/pathfinder plan data/mapf-map/orz900d.map data/scen-random/orz900d-random-2.scen 10 --planner cbs
+  --time-limit 20`; `SpaceTimeAStar.ALateConstraintOnTheGoalDoesntMakeItSearchEveryDetour`).
 - **On the MovingAI maps** (scenarios 1-5 of each, the first k agents, 10 s each; CLI loop below):
 
   | Map | Agents | Prioritized solved | CBS solved | Prioritized SOC over CBS's (both solved) | CBS time |
   |---|---|---|---|---|---|
-  | random-32-32-20 | 10 | 5 / 5 | 5 / 5 | mean 3.8%, max 12.3% | 0-3 ms |
-  | random-32-32-20 | 20 | 5 / 5 | 5 / 5 | mean 5.9%, max 16.0% | 1-150 ms |
-  | random-32-32-20 | 30 | 5 / 5 | 2 / 5 | mean 2.4%, max 3.6% | 1 ms, 1.5 s |
-  | warehouse-10-20-10-2-1 | 10 | 5 / 5 | 5 / 5 | mean 4.5%, max 22.6% | 0-42 ms |
-  | warehouse-10-20-10-2-1 | 20 | 5 / 5 | 5 / 5 | mean 3.2%, max 9.1% | 5-176 ms |
-  | warehouse-10-20-10-2-1 | 30 | 5 / 5 | 3 / 5 | mean 3.2%, max 6.2% | 11-208 ms |
+  | random-32-32-20 | 10 | 5 / 5 | 5 / 5 | mean 3.8%, max 12.3% | under 1 ms |
+  | random-32-32-20 | 20 | 5 / 5 | 5 / 5 | mean 6.3%, max 18.2% | 1-33 ms |
+  | random-32-32-20 | 30 | 5 / 5 | 2 / 5 | mean 2.7%, max 4.3% | 1 ms, 0.98 s |
+  | warehouse-10-20-10-2-1 | 10 | 5 / 5 | 5 / 5 | mean 4.5%, max 22.6% | 0-1 ms |
+  | warehouse-10-20-10-2-1 | 20 | 5 / 5 | 5 / 5 | mean 3.2%, max 9.1% | 1-13 ms |
+  | warehouse-10-20-10-2-1 | 30 | 5 / 5 | 3 / 5 | mean 3.2%, max 6.2% | 2-16 ms |
 
   CBS's SOC equals the lower bound (the agents' distances alone) on 17 of the 25 instances it solved; prioritized
-  planning's on 7 of 30. Where CBS runs out of time at 30 agents it has generated 51,437 to 877,657 nodes.
+  planning's on 7 of 30. Where CBS runs out of time at 30 agents it has generated 85,878 to 1,056,066 nodes. (These
+  are at `766d3da`, with space-time A\*'s goal bound, below. Before it, the solved counts were the same but CBS took
+  up to 176 ms at 20 agents and 1.5 s at 30, and prioritized planning's SOC came out slightly different, since the
+  search now returns other equally short paths.)
 
   **The open list's tie-break pays.** Among nodes of equal SOC, CBS takes the one whose plan has fewer conflicts.
   Removing that rule (a temporary build, not committed: the comparison deleted from `Later` in `src/cbs.cpp`) changes
-  no SOC, since both versions are optimal, but on the same 30 runs the 24 instances both solve take a median 1.66x
-  as many nodes (8 unchanged, the worst 186x: random-32-32-20 with 30 agents, scenario 3, 39 nodes against 7,271), and
-  random-32-32-20 with 30 agents, scenario 5, no longer finishes within 10 s (111,481 nodes and 1.5 s with it).
+  no SOC, since both versions are optimal, but on the same 30 runs the 24 instances both solve take a median 1.65x
+  as many nodes (8 unchanged, none fewer, the worst 186x: random-32-32-20 with 30 agents, scenario 3, 39 nodes
+  against 7,271), and random-32-32-20 with 30 agents, scenario 5, no longer finishes within 10 s (111,481 nodes and
+  0.98 s with it). Measured at `766d3da` (`.scratch/rerun_d3.sh`, not committed); before the goal bound the figures
+  were the same but 1.66x.
 
   ```bash
   for map in random-32-32-20 warehouse-10-20-10-2-1; do for k in 10 20 30; do for s in 1 2 3 4 5; do
@@ -200,10 +216,17 @@ the command next to it.
   medians of 5): on the same plans (k agents waiting 200 steps), `validate()` takes 95.3 µs / 920 µs / 9.46 ms at
   10 / 100 / 1,000 agents (about 21M agent-steps/s) and the scanner 2.84 µs / 32.1 µs / 416 µs (705M / 625M / 485M):
   34x, 29x and 23x faster. CV under 2.3% except the scanner at 1,000 agents (10.4%).
-- **CBS on a 64 x 64 random map** (20% obstacles, the scenario prioritized planning's benchmark uses): 0.265 ms (1
-  node, SOC 495) / 5.94 ms (17 nodes, 30,222 expansions, SOC 1,019) / 11.9 ms (69 nodes, 72,087 expansions, SOC
-  1,265) at 10 / 20 / 30 agents, where prioritized planning's SOC is 495 / 1,064 / 1,300. At 40 and 50 agents CBS
-  didn't finish within 500,000 nodes (13.6 s and 9.1 s; Python probe), against prioritized planning's 14.9 ms at 50.
+- **CBS on a 64 x 64 random map** (20% obstacles, the scenario prioritized planning's benchmark uses; `make bench
+  BENCH_ARGS="'--benchmark_filter=Cbs|PrioritizedPlanning'"`, medians of 5, at `766d3da`): 0.321 ms (1 node, SOC
+  495) / 1.06 ms (17 nodes, 2,318 expansions, SOC 1,019) / 2.47 ms (69 nodes, 5,879 expansions, SOC 1,265) at 10 /
+  20 / 30 agents. Before the goal bound (at `3337cfe`): 0.265 / 5.94 / 11.9 ms with the same trees but 30,222 and
+  72,087 expansions. At 40 and 50 agents CBS didn't finish within 500,000 nodes (13.6 s and 9.1 s; Python probe,
+  before the goal bound).
+- **The goal bound helps prioritized planning too**: the same benchmark's prioritized planning of 50 and 100 agents
+  went from 14.9 and 23.0 ms (at `3337cfe`, matching day 2's 14.4-14.9 ms) to 3.58 and 6.68 ms, with SOC 2,272 and
+  4,372 instead of 2,257 and 4,334 (other equally short paths change who is reserved where). The CVs of that run were
+  high at 10 and 50 agents (25% and 21%, load 5 to 8), so take the 4x as approximate; the expansion counts behind it
+  aren't load-dependent.
 
 ## Results (day 2)
 

@@ -202,9 +202,14 @@ found no path around the ones planned before it.
   is then finite, at most (horizon + 2) x passable cells, so the search ends by running out of states, and "no path"
   needs no bound at all. A brute-force oracle that does use day 1's bound (and looks twice as far when it finds
   nothing) agrees on 6,000 random problems (`tests/space_time_oracle_test.cpp`). Ties on f are broken towards larger
-  t (deeper nodes), then by generation order, so runs are deterministic. Limits: expansions (optional: none means no
-  limit, and 0 allows only a start that already passes the goal test), and a deadline checked every 1,024 expansions
-  and before the first.
+  t (deeper nodes), then by generation order, so runs are deterministic. **The goal bound (day 3)**: no path can end
+  before the goal is free for good (one step after its last vertex entry), so f = max(t + h, that time). It stays
+  admissible and consistent, and equals t + h wherever late states merge. Without it, a constraint on the goal far in
+  the future (CBS adds one whenever an agent must pass a parked one late) made the search try every detour that
+  ends too early, f-layer by f-layer: 1.4 million expansions for a goal ten cells away taken at t = 500, 501 with it;
+  on orz900d, CBS with 10 agents went from a 20 s timeout (36 million expansions) to 12 ms. Limits: expansions
+  (optional: none means no limit, and 0 allows only a start that already passes the goal test), and a deadline
+  checked every 1,024 expansions and before the first.
 - **Prioritized planning** (day 2, the baseline, `planner.hpp`): agents in a fixed order (the scenario's order by
   default; the CLI also offers its reverse and distance-based orders) are planned one at a time with space-time A\*,
   each reserving its whole path, and its goal from its arrival on. Each agent's search gets the expansions the
@@ -240,8 +245,9 @@ found no path around the ones planned before it.
   - *Each agent's distance table is built once* for the run (one per agent, sharing a `PassableIndex`), since any node
     may replan any agent.
   - *The low level* is day 2's space-time A\* with a fresh reservation table of the agent's constraints: a vertex
-    constraint is `forbid_vertex`, an edge constraint `forbid_move`. Nothing else was needed: the goal test already
-    handles constraints on the goal, and the late-state merging already bounds the search.
+    constraint is `forbid_vertex`, an edge constraint `forbid_move`. The goal test already handled constraints on
+    the goal, and the late-state merging already bounds the search; what it lacked was the goal bound on f above,
+    which CBS's late goal constraints made necessary.
   - *Conflicts* come from a `ConflictScanner` (`conflicts.hpp`): exactly the conflicts `validate()` reports, counted,
     and the earliest (a vertex conflict at t, then a swap between t and t + 1, then (a, b)). It keeps an epoch-stamped
     list per cell, sized once for the grid, instead of rebuilding a hash map at every time step: 23x to 34x faster
@@ -256,8 +262,8 @@ found no path around the ones planned before it.
     where the brute force proves there is none.
 - Later refinements, if time allows: choosing cardinal conflicts first, and a bypass. Each would be measured
   against plain CBS, not assumed to help. Day 3's measurements show where they would matter: on tiny dense
-  instances CBS needs a median of 3 nodes but 18,894 at the 99th percentile, and ten agents on the warehouse floor
-  take from 9 to 375,673 nodes depending on the seed.
+  instances CBS needs a median of 3 nodes but 18,894 at the 99th percentile (with a 200,000-node limit, before the
+  goal bound), and ten agents on the warehouse floor take from 9 to 14,331 nodes depending on the seed.
 
 ## Python and the simulator (day 4)
 

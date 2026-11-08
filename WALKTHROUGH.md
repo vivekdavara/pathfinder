@@ -14,9 +14,10 @@ assumption of mine about the files, which is now documented, tested and handled.
 agent around reservations), checked against a brute-force oracle, and prioritized planning, the baseline that CBS
 will be measured against: fast, valid by construction, and visibly incomplete once the floor gets crowded. Day 3
 added conflict-based search: it returns plans of minimum sum of costs, which a brute-force search over joint states
-confirms on every tiny instance it finishes, and it shows the classic trade: plans 2% to 6% cheaper on average than
-prioritized planning's on the benchmark maps (up to 23%), but an effort that ranges from 9 to 375,673 tree nodes for
-ten agents on the same floor.
+confirms on every tiny instance it finishes, and it shows the classic trade: plans 3% to 6% cheaper on average than
+prioritized planning's on the benchmark maps (up to 23%), but an effort that ranges from 9 to 14,331 tree nodes for
+ten agents on the same floor, and stops finishing at about 30 agents on a 32 x 32 map. It also exposed a
+performance bug in day 2's search, now fixed.
 
 ## The model
 
@@ -247,7 +248,7 @@ nothing is cleared between time steps or plans, and keeps only the count and the
 exactly validate()'s conflicts (3,000 random-walk plans, one scanner reused across all of them) and is 23x to 34x
 faster (`make bench`). The count is the open list's tie-break: among nodes of equal SOC, the one closest to valid
 first. It can't change the answer (a mutation test confirmed that: it survives every correctness test), but it
-changes the effort a lot: without it the same benchmark instances took a median 1.66x as many nodes, up to 186x,
+changes the effort a lot: without it the same benchmark instances took a median 1.65x as many nodes, up to 186x,
 and one 30-agent instance stopped finishing within 10 s (README "Results (day 3)").
 
 **When does CBS give up, and can it prove there's no plan?**
@@ -259,14 +260,27 @@ happened, so in practice "unsolvable" shows up as a limit.
 
 **How does it compare with prioritized planning?**
 On random-32-32-20 and warehouse-10-20-10-2-1 (MovingAI scenarios 1-5): both solve every 10- and 20-agent case,
-CBS in at most 176 ms; prioritized planning's SOC is 2% to 6% above CBS's on average and up to 23%. At 30 agents
+CBS in at most 33 ms; prioritized planning's SOC is 3% to 6% above CBS's on average and up to 23%. At 30 agents
 prioritized planning still solves all of them in milliseconds, CBS only 2 and 3 of 5 within 10 s. That's the trade
 the project exists to measure (day 4 does it properly, across agent counts).
 
+**Tell me about a performance bug CBS exposed.**
+On orz900d, CBS with 10 agents built only 2 tree nodes but spent 36 million low-level expansions and blew through
+a 20 s limit. The cause was in day 2's search, not in CBS: when another agent must pass through a parked agent's goal
+at, say, t = 500, the goal test correctly refuses to end before 501, but the heuristic (distance to the goal) didn't
+know that, so A\* expanded every detour that would end too early, one f-layer at a time. The fix is one line in
+`src/space_time_astar.cpp`: f = max(t + h, last goal entry + 1), still admissible and consistent. A test pins it (a
+goal ten cells away, taken at t = 500: 1,408,200 expansions before, 501 after), the brute-force oracle confirms the
+arrivals didn't change, and that orz900d case now takes 12 ms. The same search serves prioritized planning, where an
+earlier agent crossing a later agent's goal late sets the same trap, and it had been paying for it since day 2: its
+50-agent benchmark went from 14.9 ms to 3.6 ms. A day-2 measurement had been hiding a bug the whole time; CBS just
+made it impossible to miss.
+
 **Why is CBS's effort so uneven?**
-Ten agents on the same warehouse floor took 9, 77, 8,309, 14,041 or 375,673 nodes depending on the seed. When two
-agents meet in a corridor, both children usually cost the same, and the conflict reappears a step later, so the tree
-fills with ties. The known fix is to split on cardinal conflicts first (ones where both children must cost more,
+Ten agents on the same warehouse floor take 9, 77, 2,675, 8,069 or 14,331 nodes depending on the seed, and the
+2,675 was 375,673 before the goal bound, for the same SOC: only which of several equally short paths the low level
+returned had changed. When two agents meet in a corridor, both children usually cost the same, and the conflict
+reappears a step later, so the tree fills with ties. The known fix is to split on cardinal conflicts first (ones where both children must cost more,
 found from each agent's graph of optimal paths); it's on the list as a measured refinement, not an assumption.
 
 ## The review
