@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 
+#include "pathfinder/conflicts.hpp"
 #include "pathfinder/distance.hpp"
 #include "pathfinder/generate.hpp"
 #include "pathfinder/heuristic.hpp"
@@ -149,6 +150,29 @@ void BM_Validate(benchmark::State& state) {
 }
 BENCHMARK(BM_Validate)->Arg(10)->Arg(100)->Arg(1000)->Unit(benchmark::kMicrosecond);
 
+// The same plans through the ConflictScanner, which CBS runs on every node's plan instead of validate(): one scanner
+// for all iterations, as CBS keeps one for its run. Items are agent-steps.
+void BM_ConflictScan(benchmark::State& state) {
+  const auto k = static_cast<std::size_t>(state.range(0));
+  constexpr std::size_t kSteps = 200;
+  const Grid g(128, 128);
+  Plan plan;
+  for (std::size_t i = 0; i < k; ++i) {
+    plan.emplace_back(kSteps, static_cast<CellId>(i * 7 % g.cell_count()));
+  }
+  ConflictScanner scanner(g.cell_count());
+  for (auto _ : state) {
+    ConflictScan scan = scanner.scan(plan);
+    if (scan.count != 0) {
+      state.SkipWithError("the benchmark's plan should have no conflict");
+      break;
+    }
+    benchmark::DoNotOptimize(scan);
+  }
+  state.SetItemsProcessed(state.iterations() * static_cast<std::int64_t>(k * kSteps));
+}
+BENCHMARK(BM_ConflictScan)->Arg(10)->Arg(100)->Arg(1000)->Unit(benchmark::kMicrosecond);
+
 // One agent across a square map by space-time A*: with nothing reserved, and around the paths of the 50 agents
 // after it in the same scenario, planned first (prioritized planning's situation). Items are expansions.
 void BM_SpaceTimeAStar(benchmark::State& state) {
@@ -201,6 +225,29 @@ void BM_PrioritizedPlanning(benchmark::State& state) {
   }
 }
 BENCHMARK(BM_PrioritizedPlanning)->Arg(10)->Arg(50)->Arg(100)->Unit(benchmark::kMillisecond);
+
+// CBS on the same map and scenario as prioritized planning, at the agent counts it solves quickly (at 40 and 50 it
+// didn't finish within 500,000 nodes: README "Results (day 3)"). Counters: the tree's nodes, the low level's
+// expansions, and the SOC, which prioritized planning's may exceed.
+void BM_Cbs(benchmark::State& state) {
+  const Square sq = square(64);
+  const auto k = static_cast<std::size_t>(state.range(0));
+  const Instance inst = make_instance(sq.grid, random_scenario(sq.grid, k, 5, "b.map"), k);
+  PlannerLimits limits;
+  limits.max_nodes = 100000;
+  for (auto _ : state) {
+    PlanResult r = cbs(inst, limits);
+    if (r.status != PlanStatus::kSolved) {
+      state.SkipWithError("not solved");
+      break;
+    }
+    state.counters["SOC"] = static_cast<double>(r.sum_of_costs);
+    state.counters["nodes"] = static_cast<double>(r.nodes_generated);
+    state.counters["expansions"] = static_cast<double>(r.expansions);
+    benchmark::DoNotOptimize(r);
+  }
+}
+BENCHMARK(BM_Cbs)->Arg(10)->Arg(20)->Arg(30)->Unit(benchmark::kMillisecond);
 
 // One heuristic table on a MovingAI map: all cells (distances) against passable cells only (DistanceTable), from the
 // map's first passable cell. orz900d is the case DESIGN.md's budget worried about: a tenth of its cells passable.
