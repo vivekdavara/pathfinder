@@ -501,13 +501,27 @@ had let through. CI's GCC job then failed to compile one of the second round's t
   keeps a table per agent; prioritized planning holds one at a time.
 - **Unsolvable instances are named up front**: a goal in another piece is `kUnreachableGoal` before any search, so a
   benchmark never spends its time limit proving it.
+- **CBS nodes store only what they changed** (day 3): one constraint and one agent's new path, with plans and
+  constraints collected by walking to the root. A full plan per node would cost k paths of memory per node for a
+  tree that can reach hundreds of thousands of nodes; the walk costs O(depth + k) per node instead.
+- **A conflict scanner, not `validate()`, in CBS's inner loop** (day 3): the same conflicts (checked on 3,000 plans),
+  23x to 34x faster, and only what CBS needs (the count for its tie-break and the earliest conflict to split on).
+  The oracle stays simple and separate.
+- **CBS's limits are part of its contract** (day 3): an unsolvable instance whose goals are reachable usually never
+  exhausts the tree, so every caller passes a node, expansion or time limit, and so does every test.
 - **The benchmark set is fetched, not committed**, and checked by SHA-256 before anything is unpacked; the unpacker
   writes only `.map`/`.scen` files to plain paths under `data/`.
 
 ## Limitations
 
-- Only the baseline planner so far: prioritized planning is neither complete nor optimal, and fails on crowded
-  instances that have solutions (README "Results (day 2)"); CBS is day 3.
+- Prioritized planning is neither complete nor optimal, and fails on crowded instances that have solutions (README
+  "Results (day 2)"). CBS is optimal but plain: no cardinal-conflict selection, bypass or symmetry reasoning, so its
+  effort varies by orders of magnitude between similar instances and it stops finishing at about 30 agents on the
+  32 x 32 benchmark maps (README "Results (day 3)").
+- CBS proves an instance unsolvable (`kNoPath`) only if its tree runs out, which didn't happen on any of 226 unsolvable
+  tiny instances: in practice an unsolvable instance ends at a limit, indistinguishable from a hard solvable one.
+- CBS builds a fresh reservation table, with a byte per grid cell, for every low-level search: cheap on the 32 x 32
+  and warehouse maps, but about 1 MB per node on orz900d.
 - A reservation table is hash sets behind a byte per cell that says whether anything names the cell: with 50 planned
   paths in it, an expansion still costs nearly twice as much as with an empty table (`BM_SpaceTimeAStar`), because
   around planned paths most cells are named. Per-cell sorted lists of times would be the next step if it matters.
