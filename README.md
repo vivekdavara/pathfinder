@@ -3,13 +3,14 @@
 Collision-free paths for many robots on a grid warehouse map at once: multi-agent path finding (MAPF) by
 conflict-based search, against prioritized planning as the baseline, in C++20 with Python bindings for experiments.
 
-**Status: day 2 of 5.** Built so far: the specification ([DESIGN.md](DESIGN.md)), the grid, the MovingAI map and
+**Status: day 3 of 5.** Built so far: the specification ([DESIGN.md](DESIGN.md)), the grid, the MovingAI map and
 scenario formats, a plan file format, seeded map and scenario generators (random and warehouse floors), BFS and
 octile distances, the plan validator every planner is tested against, a CLI, the Python module, a script that
 fetches the MovingAI MAPF benchmark set, and CI (day 1); then space-time A\* with a reservation table, checked against
 a brute-force oracle, and prioritized planning, the baseline planner, in the library, the CLI (`pathfinder plan`)
-and Python (day 2). Next: CBS (day 3), benchmarks and a step-by-step simulator (day 4), a replay visualizer and
-v1.0.0 (day 5).
+and Python (day 2); then conflict-based search, which returns plans of minimum sum of costs, checked against a
+brute-force optimum, with a fast conflict scanner, in the library, the CLI (`--planner cbs`) and Python (day 3).
+Next: benchmarks and a step-by-step simulator (day 4), a replay visualizer and v1.0.0 (day 5).
 
 ## Why
 
@@ -44,6 +45,8 @@ flowchart LR
   RES["reservation table"] --> STA
   STA --> PP["prioritized planning<br/>(day 2)"]
   STA --> CBS["CBS (day 3)"]
+  SCAN["conflict scanner"] -- "count, first conflict" --> CBS
+  CBS -- "each node's constraints" --> RES
   PP -- "each planned path" --> RES
   PP --> VAL["validate<br/>(the oracle)"]
   CBS --> VAL
@@ -66,7 +69,8 @@ flowchart LR
 | `include/pathfinder/heuristic.hpp`, `src/heuristic.cpp` | the planners' heuristic tables, by passable cell (`PassableIndex`, `DistanceTable`) |
 | `include/pathfinder/reservation.hpp`, `src/reservation.cpp` | the reservation table: what a space-time search must avoid |
 | `include/pathfinder/space_time_astar.hpp`, `src/space_time_astar.cpp` | space-time A\* |
-| `include/pathfinder/planner.hpp`, `src/prioritized.cpp` | the planners' limits and result; prioritized planning |
+| `include/pathfinder/planner.hpp`, `src/planner_common.hpp`, `src/prioritized.cpp`, `src/cbs.cpp` | the planners' limits and result, what they check the same way; prioritized planning; CBS |
+| `include/pathfinder/conflicts.hpp`, `src/conflicts.cpp` | the conflict scanner: a plan's conflicts, counted, and the earliest (what CBS splits on) |
 | `tools/pathfinder_cli.cpp` | the `pathfinder` command |
 | `python/` | the pybind11 module `pathfinder._core` and the `pathfinder` package |
 | `tests/` | GoogleTest suites, `cli_test.sh`, `python/` (pytest), `data/` (small hand-written files), `review/` (the review's tests) |
@@ -100,6 +104,7 @@ build/dev/pathfinder validate tests/data/small.map tests/data/small.scen tests/d
 build/dev/pathfinder check data/mapf-map/random-32-32-20.map data/scen-random/random-32-32-20-random-1.scen 100
 build/dev/pathfinder plan tests/data/small.map tests/data/small.scen 3 --out small.plan
 build/dev/pathfinder plan data/mapf-map/empty-32-32.map data/scen-random/empty-32-32-random-1.scen 200 --order longest
+build/dev/pathfinder plan data/mapf-map/random-32-32-20.map data/scen-random/random-32-32-20-random-1.scen 20 --planner cbs --time-limit 10
 ```
 
 `check` exits 0 when the instance is valid and every goal reachable, 1 when it isn't; `validate` exits 0 for a valid
@@ -108,7 +113,9 @@ prioritized planning solves the instance (printing the SOC next to its lower bou
 alone, and writing the plan to `--out` after `validate` has passed it) and 1 when it doesn't (printing which agent it
 stopped at and why); all exit 2 on a usage error, a file that can't be read or parsed, or output that can't be
 written. `plan` also takes `--order scenario|reverse|longest|shortest`, `--max-expansions N` and `--time-limit
-SECONDS`. From Python:
+SECONDS`. With `--planner cbs` it runs CBS instead (and takes `--max-nodes N` to cap the constraint tree): the output
+adds the nodes generated and expanded, a CBS that runs out of tree says no plan exists, and a limit names no agent.
+From Python:
 
 ```python
 import pathfinder as pf                       # PYTHONPATH=build/dev/python
@@ -120,6 +127,11 @@ print(check.valid, [pf.describe(p, g) for p in check.problems][:2])
 
 r = pf.prioritized_planning(inst, time_limit=10.0)            # or order=[...], max_expansions=...
 print(r.status, r.sum_of_costs, r.makespan, pf.validate(inst, r.plan).valid if r.solved else r.failed_agent)
+
+best = pf.cbs(inst, time_limit=10.0, max_nodes=100_000)       # minimum SOC, or LIMIT (as here: 20 agents on
+                                                              # this floor take plain CBS over 100,000 nodes)
+print(best.status, best.sum_of_costs, best.nodes_generated)
+print(pf.scan_conflicts(g, [[a.start] for a in inst.agents]))  # (count, first Conflict or None)
 
 table = pf.ReservationTable(g)                                # one agent around another's path
 table.reserve_path(r.plan[0])
@@ -137,6 +149,55 @@ paths have a sum of costs of 435 (the lower bound) and 51 conflicts; prioritized
 (26% over the bound), makespan 34, 3,620 expansions; and taking the first k agents of one 102-agent scenario,
 prioritized planning first fails at 43 agents, in either order (`PYTHONPATH=build/dev/python .venv/bin/python
 examples/prioritized_vs_independent.py --agents 30 --seed 1`; CTest: `python.example.prioritized`).
+
+## Results (day 3)
+
+Measured on an Apple M3, macOS 26.6.2, Apple Clang 21, on battery, with a review agent building in its own worktree
+(load 4 to 7): the timings carry that load; node, expansion and SOC counts don't depend on it. Every number comes from
+the command next to it.
+
+- **CBS is optimal where it can be checked.** `tests/cbs_oracle_test.cpp` compares it with a brute-force optimum
+  (Dijkstra's algorithm over joint states of all the agents, written from the model alone) on 1,500 random tiny
+  instances (2 x 2 to 4 x 4 grids, 2 to 4 agents): 1,148 solvable, and CBS's SOC equals the optimum on all 1,116 it
+  finishes within 3,000 nodes; 226 unsolvable, and CBS never returns a plan for one (it never proves it either: the
+  tree never runs out, so it stops at its limit). Prioritized planning is above the optimum on 114 of the solvable
+  ones and fails on 242 (`build/dev/tests/pathfinder_tests --gtest_filter=CbsOracle.*`).
+- **Its effort is all over the place.** On those tiny instances it needs a median of 3 nodes, 60 at the 90th
+  percentile and 18,894 at the 99th; the most for one it solved was 184,035, and 8 solvable ones weren't solved
+  within 200,000 (Release, the test's limit raised to 200,000 for one run, 144 s). Ten agents on the default
+  warehouse floor (`warehouse_map()`, seeds 1-5) take 8,309 / 9 / 77 / 375,673 / 14,041 nodes for SOC 163 / 123 /
+  146 / 130 / 158, against prioritized planning's 178 / 131 / 146 / 130 / 158 (Python, `pf.cbs(inst,
+  max_nodes=2_000_000, time_limit=60)`; seed 4 took 3.16 s). This is plain CBS's known weakness: many conflicts
+  whose two children cost the same, so the open list fills with ties. Choosing cardinal conflicts first is the
+  standard fix (DESIGN.md "Later refinements").
+- **On the MovingAI maps** (scenarios 1-5 of each, the first k agents, 10 s each; CLI loop below):
+
+  | Map | Agents | Prioritized solved | CBS solved | Prioritized SOC over CBS's (both solved) | CBS time |
+  |---|---|---|---|---|---|
+  | random-32-32-20 | 10 | 5 / 5 | 5 / 5 | mean 3.8%, max 12.3% | 0-3 ms |
+  | random-32-32-20 | 20 | 5 / 5 | 5 / 5 | mean 5.9%, max 16.0% | 1-150 ms |
+  | random-32-32-20 | 30 | 5 / 5 | 2 / 5 | mean 2.4%, max 3.6% | 1 ms, 1.5 s |
+  | warehouse-10-20-10-2-1 | 10 | 5 / 5 | 5 / 5 | mean 4.5%, max 22.6% | 0-42 ms |
+  | warehouse-10-20-10-2-1 | 20 | 5 / 5 | 5 / 5 | mean 3.2%, max 9.1% | 5-176 ms |
+  | warehouse-10-20-10-2-1 | 30 | 5 / 5 | 3 / 5 | mean 3.2%, max 6.2% | 11-208 ms |
+
+  CBS's SOC equals the lower bound (the agents' distances alone) on 17 of the 25 instances it solved; prioritized
+  planning's on 7 of 30. Where CBS runs out of time at 30 agents it has generated 51,437 to 877,657 nodes.
+
+  ```bash
+  for map in random-32-32-20 warehouse-10-20-10-2-1; do for k in 10 20 30; do for s in 1 2 3 4 5; do
+    build/release/pathfinder plan data/mapf-map/$map.map data/scen-random/$map-random-$s.scen $k --time-limit 10
+    build/release/pathfinder plan data/mapf-map/$map.map data/scen-random/$map-random-$s.scen $k --planner cbs --time-limit 10
+  done; done; done
+  ```
+- **The conflict scanner** (`make bench BENCH_ARGS="'--benchmark_filter=Validate|ConflictScan|Cbs|PrioritizedPlanning'"`,
+  medians of 5): on the same plans (k agents waiting 200 steps), `validate()` takes 95.3 µs / 920 µs / 9.46 ms at
+  10 / 100 / 1,000 agents (about 21M agent-steps/s) and the scanner 2.84 µs / 32.1 µs / 416 µs (705M / 625M / 485M):
+  34x, 29x and 23x faster. CV under 2.3% except the scanner at 1,000 agents (10.4%).
+- **CBS on a 64 x 64 random map** (20% obstacles, the scenario prioritized planning's benchmark uses): 0.265 ms (1
+  node, SOC 495) / 5.94 ms (17 nodes, 30,222 expansions, SOC 1,019) / 11.9 ms (69 nodes, 72,087 expansions, SOC
+  1,265) at 10 / 20 / 30 agents, where prioritized planning's SOC is 495 / 1,064 / 1,300. At 40 and 50 agents CBS
+  didn't finish within 500,000 nodes (13.6 s and 9.1 s; Python probe), against prioritized planning's 14.9 ms at 50.
 
 ## Results (day 2)
 
