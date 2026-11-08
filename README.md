@@ -156,6 +156,12 @@ Measured on an Apple M3, macOS 26.6.2, Apple Clang 21, on battery, with a review
 (load 4 to 8): the timings carry that load; node, expansion and SOC counts don't depend on it. Every number comes from
 the command next to it.
 
+- **Tests**: 196 CTest tests at `d79e431` (`ctest --preset dev -N`; 170 on day 2): new are the conflict scanner's
+  (`tests/conflicts_test.cpp`), CBS's (`tests/cbs_test.cpp`), the brute-force optimum (`tests/cbs_oracle_test.cpp`),
+  the review's (`tests/review_d3/`), the late-goal search test, and CLI and pytest cases. `make asan` at `f4cc27a`:
+  187 of 187. `make coverage` at `5a47089`: `src/cbs.cpp` 99.0% of lines, `src/conflicts.cpp` 94.5% (the epoch-wrap
+  reset and the too-many-agents throw are the misses), the shared planner checks and prioritized planning 100%; all
+  of the library 98.9% of lines and 97.3% of branches.
 - **CBS is optimal where it can be checked.** `tests/cbs_oracle_test.cpp` compares it with a brute-force optimum
   (Dijkstra's algorithm over joint states of all the agents, written from the model alone) on 1,500 random tiny
   instances (2 x 2 to 4 x 4 grids, 2 to 4 agents): 1,148 solvable, and CBS's SOC equals the optimum on all 1,115 it
@@ -495,6 +501,28 @@ planned alone), and `neighbours` against coordinates on every grid up to 7 x 7 a
 10,000 grid; one of its checks kills a mutant (dropping the off-grid test in `direction_or_none`) that all 166 tests
 had let through. CI's GCC job then failed to compile one of the second round's tests: casts between `uint64_t` and
 `size_t`, the same type on Linux and different types on macOS, where `make gcc-check` runs (`ca700fa`).
+
+## Review of day 3
+
+A review agent at `ee6d2ef` (its own worktree, asked for correctness bugs, each proved by a failing test; tests in
+`tests/review_d3/`) found one bug, at the edge of the contract again rather than in the search:
+
+1. `max_nodes` was checked before each child's low-level search, so a child with no path (never generated) still
+   used up the limit, and a run allowed exactly the nodes an unlimited run needed gave up one split short of its
+   solution: about 1% of solved tiny instances (48 of ~3,600 in its harness). The limit is now checked once a child
+   exists, and a node-limited stop has generated exactly `max_nodes` (`d79e431`).
+
+It also pointed out that CBS built every agent's distance table before looking at the clock; it now checks before
+each (300 agents on a 400 x 400 grid with a 20 ms limit: 26 ms with the check, 3.24 s without; Debug). Its clean
+checks: CBS against its own joint-state optimum on instances `random_scenario` never makes (goals permuted among the
+starts, agents starting on their goals): 260 rounds in the test, about 3,600 solvable and 1,700 unsolvable in its
+harness, no disagreement on SOC, validity, `kNoPath` or the expansion limit. Of its 11 mutants, 6 were killed by the
+suite and 2 by its clean tests (the clock check before each search; the fewer-conflicts tie-break, through a pin of
+the node counts on one instance); reversing the node-id tie-break (optimal either way) and dropping the epoch-wrap
+reset (it needs 2^32 scanned time steps) survive; dropping the scanner's last-step `break` is equivalent.
+
+The goal bound (`766d3da`) came after that review: it was checked by both space-time A\* oracles and the CBS oracles,
+and three mutants of it (one too high, one too low, added instead of taking the max) each fail a test.
 
 ## Design decisions
 

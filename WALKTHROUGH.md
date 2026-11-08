@@ -323,6 +323,15 @@ thread calling `forbid_vertex` rehashed the hash set under the running search an
 Python. The search now keeps the GIL; `prioritized_planning` can still release it because nothing in Python can
 change an `Instance`. Releasing the GIL is a promise that nobody else can touch what you're reading.
 
+**What did the day-3 review find?**
+One bug, again at the contract's edge: CBS asked "may I generate another node?" before each child's search instead
+of once the child existed, so a child that turned out to have no path still used up the node limit, and a run given
+exactly the nodes it needed gave up one split early (about 1% of tiny instances). Now the limit is checked when a
+child is about to be added, and a stop at the limit has generated exactly the limit. It also noted that CBS built all
+its distance tables before looking at the clock; with 300 agents on a big grid that turned a 20 ms limit into 3.2 s.
+Its best clean check compared CBS with its own brute force on instances my generator never makes (agents starting
+on their goals, goals that are a permutation of the starts): no disagreement in about 5,300 instances.
+
 **Tell me about a bug in your own test tooling.**
 Two. My first test of the bounded draw's bias used n = 2^63 + 1 and expected about half the draws above 2^63 - 1;
 but only two values lie there, so it failed on correct code. The right example is n = 3 · 2^62, where a plain modulo
