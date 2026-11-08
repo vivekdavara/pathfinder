@@ -49,11 +49,12 @@ constexpr std::string_view kUsageText =
     "  pathfinder validate MAP SCEN PLAN\n"
     "      check a .plan file for the scenario's first k entries (k from the plan): its sum of costs and makespan,\n"
     "      or every problem with it\n"
-    "  pathfinder plan MAP SCEN AGENTS [--out PLAN] [--order scenario|reverse|longest|shortest]\n"
-    "                 [--max-expansions N] [--time-limit SECONDS]\n"
-    "      plan the scenario's first AGENTS entries with prioritized planning (agents in the scenario's order,\n"
-    "      its reverse, or by distance alone, longest or shortest first; ties by scenario order) and print the\n"
-    "      outcome; when solved, the plan is checked with validate and written to PLAN if given\n";
+    "  pathfinder plan MAP SCEN AGENTS [--planner pp|cbs] [--out PLAN] [--max-expansions N]\n"
+    "                 [--time-limit SECONDS] [--order scenario|reverse|longest|shortest] [--max-nodes N]\n"
+    "      plan the scenario's first AGENTS entries and print the outcome; when solved, the plan is checked with\n"
+    "      validate and written to PLAN if given. pp (the default): prioritized planning, agents in --order (the\n"
+    "      scenario's, its reverse, or by distance alone, longest or shortest first; ties by scenario order).\n"
+    "      cbs: conflict-based search, minimum sum of costs; --max-nodes caps its constraint tree\n";
 
 struct UsageError : std::runtime_error {
   using std::runtime_error::runtime_error;
@@ -248,8 +249,10 @@ int plan(const std::vector<std::string_view>& args) {
     throw UsageError("wrong number of arguments");
   }
   std::optional<std::filesystem::path> out;
-  std::string_view order_name = "scenario";
+  std::string_view planner = "pp";
+  std::optional<std::string_view> order_name;
   pf::PlannerLimits limits;
+  bool node_limit = false;
   for (std::size_t i = 3; i < args.size(); i += 2) {
     if (i + 1 >= args.size()) {
       throw UsageError("option " + std::string(args[i]) + " needs a value");
@@ -257,8 +260,16 @@ int plan(const std::vector<std::string_view>& args) {
     const std::string_view value = args[i + 1];
     if (args[i] == "--out") {
       out = std::filesystem::path(value);
+    } else if (args[i] == "--planner") {
+      if (value != "pp" && value != "cbs") {
+        throw UsageError("unknown planner '" + std::string(value) + "' (pp or cbs)");
+      }
+      planner = value;
     } else if (args[i] == "--order") {
       order_name = value;
+    } else if (args[i] == "--max-nodes") {
+      limits.max_nodes = whole<std::uint64_t>("--max-nodes", value);
+      node_limit = true;
     } else if (args[i] == "--max-expansions") {
       limits.max_expansions = whole<std::uint64_t>("--max-expansions", value);
     } else if (args[i] == "--time-limit") {
@@ -266,6 +277,13 @@ int plan(const std::vector<std::string_view>& args) {
     } else {
       throw UsageError("unknown option '" + std::string(args[i]) + "'");
     }
+  }
+  const bool use_cbs = planner == "cbs";
+  if (use_cbs && order_name) {
+    throw UsageError("--order is for prioritized planning (--planner pp)");
+  }
+  if (!use_cbs && node_limit) {
+    throw UsageError("--max-nodes is for conflict-based search (--planner cbs)");
   }
   const pf::Grid g = pf::load_map(std::filesystem::path(args[0]));
   const pf::Scenario s = pf::load_scenario(std::filesystem::path(args[1]));
@@ -288,10 +306,14 @@ int plan(const std::vector<std::string_view>& args) {
     dist[i] = pf::distances(g, inst.agents[i].goal)[inst.agents[i].start];
     lower_bound += dist[i] == pf::kUnreachable ? 0 : dist[i];
   }
-  const std::vector<std::size_t> order = agent_order(order_name, dist);
-  const pf::PlanResult r = pf::prioritized_planning(inst, limits, order);
+  const std::vector<std::size_t> order = agent_order(order_name.value_or("scenario"), dist);
+  const pf::PlanResult r = use_cbs ? pf::cbs(inst, limits) : pf::prioritized_planning(inst, limits, order);
   const auto ms = [&r] { return std::to_string(std::llround(r.seconds * 1000)) + " ms"; };
-  const std::string stats = std::to_string(r.expansions) + " expansions, " + ms();
+  std::string stats = std::to_string(r.expansions) + " expansions, ";
+  if (use_cbs) {
+    stats += std::to_string(r.nodes_generated) + " nodes (" + std::to_string(r.nodes_expanded) + " expanded), ";
+  }
+  stats += ms();
   switch (r.status) {
     case pf::PlanStatus::kSolved: {
       const pf::PlanCheck check = pf::validate(inst, r.plan);
@@ -316,6 +338,10 @@ int plan(const std::vector<std::string_view>& args) {
       std::cout << "not solved: agent " << r.failed_agent << " can't reach its goal even alone\n";
       return kProblem;
     case pf::PlanStatus::kNoPath: {
+      if (use_cbs) {
+        std::cout << "not solved: no plan exists (the constraint tree ran out of nodes), " << stats << "\n";
+        return kProblem;
+      }
       const auto before = static_cast<std::size_t>(
           std::find(order.begin(), order.end(), r.failed_agent) - order.begin());
       std::cout << "not solved: agent " << r.failed_agent << " found no path around the " << before
@@ -323,7 +349,11 @@ int plan(const std::vector<std::string_view>& args) {
       return kProblem;
     }
     case pf::PlanStatus::kLimit:
-      std::cout << "not solved: stopped by a limit at agent " << r.failed_agent << ", " << stats << "\n";
+      if (use_cbs) {
+        std::cout << "not solved: stopped by a limit, " << stats << "\n";
+      } else {
+        std::cout << "not solved: stopped by a limit at agent " << r.failed_agent << ", " << stats << "\n";
+      }
       return kProblem;
   }
   return kProblem;

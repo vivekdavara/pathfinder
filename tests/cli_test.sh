@@ -173,6 +173,29 @@ has "$tmp/out" "not solved: stopped by a limit at agent 0, 5 expansions"
 expect 1 "$cli" plan "$data/small.map" "$tmp/shared_goal.scen" 2
 has "$tmp/out" "invalid instance: "
 
+# plan --planner cbs: the room prioritized planning can't solve in scenario order, at its optimum (10, against 7 for
+# the two alone); the plan written and valid.
+expect 0 "$cli" plan "$tmp/room.map" "$tmp/room.scen" 2 --planner cbs --out "$tmp/room_cbs.plan"
+has "$tmp/out" "solved 2 agents: sum of costs 10 (lower bound 7), makespan 5, "
+has "$tmp/out" " nodes ("
+expect 0 "$cli" validate "$tmp/room.map" "$tmp/room.scen" "$tmp/room_cbs.plan"
+is_line "$tmp/out" "valid plan for 2 agents: sum of costs 10, makespan 5"
+expect 0 "$cli" plan "$data/small.map" "$data/small.scen" 3 --planner cbs --max-nodes 1
+has "$tmp/out" "solved 3 agents: sum of costs 20 (lower bound 20), makespan 7, 20 expansions, 1 nodes (0 expanded), "
+expect 0 "$cli" plan "$data/small.map" "$data/small.scen" 3 --planner pp
+has "$tmp/out" "solved 3 agents: sum of costs 20"
+# Two agents that must swap in a two-cell corridor: no plan, and CBS can't prove it, so a limit stops it.
+printf 'type octile\nheight 1\nwidth 2\nmap\n..\n' > "$tmp/pair.map"
+printf 'version 1\n0\tpair.map\t2\t1\t0\t0\t1\t0\t1\n0\tpair.map\t2\t1\t1\t0\t0\t0\t1\n' > "$tmp/pair.scen"
+expect 1 "$cli" plan "$tmp/pair.map" "$tmp/pair.scen" 2 --planner cbs --max-nodes 50 --out "$tmp/pair.plan"
+has "$tmp/out" "not solved: stopped by a limit, "
+has "$tmp/out" " 50 nodes ("
+[ ! -e "$tmp/pair.plan" ] || fail "plan --planner cbs wrote a plan file for an unsolved instance"
+expect 1 "$cli" plan "$tmp/pair.map" "$tmp/pair.scen" 2 --planner cbs --time-limit 0.05
+has "$tmp/out" "not solved: stopped by a limit, "
+expect 1 "$cli" plan "$tmp/split.map" "$tmp/split.scen" 1 --planner cbs
+is_line "$tmp/out" "not solved: agent 0 can't reach its goal even alone"
+
 # plan: usage errors and unwritable output (exit 2).
 expect 2 "$cli" plan "$data/small.map" "$data/small.scen"
 expect 2 "$cli" plan "$data/small.map" "$data/small.scen" 4
@@ -187,6 +210,13 @@ expect 2 "$cli" plan "$data/small.map" "$data/small.scen" 3 --verbose yes
 has "$tmp/err" "unknown option '--verbose'"
 expect 2 "$cli" plan "$data/small.map" "$data/small.scen" 3 --out "$tmp"
 has "$tmp/err" "can't write $tmp"
+expect 2 "$cli" plan "$data/small.map" "$data/small.scen" 3 --planner astar
+has "$tmp/err" "unknown planner 'astar' (pp or cbs)"
+expect 2 "$cli" plan "$data/small.map" "$data/small.scen" 3 --planner cbs --order reverse
+has "$tmp/err" "--order is for prioritized planning (--planner pp)"
+expect 2 "$cli" plan "$data/small.map" "$data/small.scen" 3 --max-nodes 10
+has "$tmp/err" "--max-nodes is for conflict-based search (--planner cbs)"
+expect 2 "$cli" plan "$data/small.map" "$data/small.scen" 3 --planner cbs --max-nodes x
 
 # Output that can't be written (here a closed stdout) is an error, not success.
 "$cli" gen-map empty 3 3 >&- 2> "$tmp/err"
