@@ -246,7 +246,9 @@ time step and reports everything in a fixed order; the scanner keeps one list pe
 nothing is cleared between time steps or plans, and keeps only the count and the earliest conflict. It finds
 exactly validate()'s conflicts (3,000 random-walk plans, one scanner reused across all of them) and is 23x to 34x
 faster (`make bench`). The count is the open list's tie-break: among nodes of equal SOC, the one closest to valid
-first.
+first. It can't change the answer (a mutation test confirmed that: it survives every correctness test), but it
+changes the effort a lot: without it the same benchmark instances took a median 1.66x as many nodes, up to 186x,
+and one 30-agent instance stopped finishing within 10 s (README "Results (day 3)").
 
 **When does CBS give up, and can it prove there's no plan?**
 Two agents that must swap in a dead end: no plan exists, but each constraint only pushes a move one step later, so

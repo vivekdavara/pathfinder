@@ -184,6 +184,12 @@ the command next to it.
   CBS's SOC equals the lower bound (the agents' distances alone) on 17 of the 25 instances it solved; prioritized
   planning's on 7 of 30. Where CBS runs out of time at 30 agents it has generated 51,437 to 877,657 nodes.
 
+  **The open list's tie-break pays.** Among nodes of equal SOC, CBS takes the one whose plan has fewer conflicts.
+  Removing that rule (a temporary build, not committed: the comparison deleted from `Later` in `src/cbs.cpp`) changes
+  no SOC, since both versions are optimal, but on the same 30 runs the 24 instances both solve take a median 1.66x
+  as many nodes (8 unchanged, the worst 186x: random-32-32-20 with 30 agents, scenario 3, 39 nodes against 7,271), and
+  random-32-32-20 with 30 agents, scenario 5, no longer finishes within 10 s (111,481 nodes and 1.5 s with it).
+
   ```bash
   for map in random-32-32-20 warehouse-10-20-10-2-1; do for k in 10 20 30; do for s in 1 2 3 4 5; do
     build/release/pathfinder plan data/mapf-map/$map.map data/scen-random/$map-random-$s.scen $k --time-limit 10
