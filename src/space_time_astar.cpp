@@ -18,7 +18,8 @@ struct Node {
   std::uint32_t parent;  // index into the node list; the root is its own parent
 };
 
-// An open-list entry. g = t (every action costs 1), so f = t + h.
+// An open-list entry. g = t (every action costs 1), so f = t + h, raised to the earliest time any path can end (see
+// `earliest_end` below).
 struct Entry {
   std::uint32_t f;
   std::uint32_t t;
@@ -70,6 +71,12 @@ SearchResult space_time_astar(const Grid& grid, CellId start, const DistanceTabl
     return result;
   }
   const std::optional<std::uint32_t> goal_taken_until = table.last_vertex_time(goal);
+  // No path can end before the goal is free for good, so no path through any state can either: f = max(t + h,
+  // earliest_end). Still admissible, and consistent (t + h and the constant both are, so their max is). Without it, a
+  // constraint on the goal far in the future made the search expand every detour that ends too early, layer by
+  // layer of f: 1.4 million expansions to reach a goal ten cells away that is taken at t = 500. (From `settled` on,
+  // where late states merge, t >= earliest_end, so f is t + h there and the re-push argument below is unchanged.)
+  const std::uint32_t earliest_end = goal_taken_until ? *goal_taken_until + 1 : 0;
   // From `settled` on, a cell's state doesn't depend on the time: every later time of a cell is the same state.
   const std::uint32_t settled = table.horizon() + 1;
   const auto state = [settled](CellId c, std::uint32_t t) {
@@ -91,7 +98,7 @@ SearchResult space_time_astar(const Grid& grid, CellId start, const DistanceTabl
     }
     const auto index = static_cast<std::uint32_t>(nodes.size());
     nodes.push_back(Node{c, t, parent});
-    open.push(Entry{t + h(c), t, index});
+    open.push(Entry{std::max(t + h(c), earliest_end), t, index});
     ++result.generated;
   };
 

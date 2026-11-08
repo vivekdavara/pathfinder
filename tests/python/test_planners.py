@@ -149,20 +149,15 @@ def test_cbs_limits_and_statuses():
 
 
 def test_cbs_never_costs_more_than_prioritized_planning():
-    # Ten agents on the warehouse floor. CBS's effort varies wildly: seeds 1-5 took 8,309, 9, 77, 375,673 and 14,041
-    # nodes when this was written, so seed 4 stops at the limit here.
+    # Ten agents on the warehouse floor: seeds 1-5 take 8,069, 9, 77, 2,675 and 14,331 nodes (seed 4 took 375,673
+    # before space-time A*'s goal bound changed which of its equally short paths it returns).
     g = pf.warehouse_map()
-    solved = 0
     for seed in range(1, 6):
         inst = pf.make_instance(g, pf.random_scenario(g, 10, seed, "w.map"), 10)
         pp = pf.prioritized_planning(inst)
         r = pf.cbs(inst, max_nodes=20000)
-        if r.status == pf.PlanStatus.LIMIT:
-            continue
         assert r.solved and pf.validate(inst, r.plan).valid
         assert pp.solved and r.sum_of_costs <= pp.sum_of_costs
-        solved += 1
-    assert solved == 4
 
 
 def test_scan_conflicts_matches_validate():

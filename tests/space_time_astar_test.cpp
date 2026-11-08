@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <iostream>
 #include <memory>
 #include <stdexcept>
 
@@ -218,6 +219,22 @@ TEST(SpaceTimeAStar, RefusesATableMadeForAnotherGrid) {
   const Grid g(4, 4);
   const ReservationTable other(Grid(8, 2));  // as many cells, other rows
   EXPECT_THROW(space_time_astar(g, 0, 15, other), std::invalid_argument);
+}
+
+// A constraint on the goal far in the future (CBS adds one when another agent passes the parked agent late): the
+// agent can't finish before it, and the search must find that out without trying every detour first. The arrival
+// is t = 501 either way; the expansions are what the heuristic's goal bound is for (DESIGN.md "The planners").
+TEST(SpaceTimeAStar, ALateConstraintOnTheGoalDoesntMakeItSearchEveryDetour) {
+  const Grid g(60, 60);
+  ReservationTable table(g);
+  const CellId goal = g.id(Point{10, 0});
+  table.forbid_vertex(goal, 500);
+  const SearchResult r = space_time_astar(g, 0, goal, table);
+  ASSERT_EQ(r.status, SearchStatus::kFound);
+  EXPECT_EQ(r.path.size(), 502U);
+  EXPECT_EQ(testing::allowed(g, table, r.path, 0, goal), "");
+  EXPECT_LT(r.expansions, 5000U);
+  std::cout << "[ late goal ] " << r.expansions << " expansions, " << r.generated << " generated\n";
 }
 
 }  // namespace
