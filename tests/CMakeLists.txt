@@ -70,3 +70,10 @@ add_executable(pathfinder_review_d3_tests review_d3/review_d3_test.cpp)
 target_link_libraries(pathfinder_review_d3_tests PRIVATE pathfinder::pathfinder GTest::gtest_main)
 pathfinder_set_warnings(pathfinder_review_d3_tests)
 gtest_discover_tests(pathfinder_review_d3_tests DISCOVERY_MODE PRE_TEST TEST_PREFIX "review_d3.")
+
+# The day-3 second-round review (tests/review_d3b/, at d79e431): it found no bug; all ReviewD3bClean, checks that
+# passed there, kept for their coverage (the goal bound against an oracle, the CBS limits' exactness).
+add_executable(pathfinder_review_d3b_tests review_d3b/review_d3b_test.cpp)
+target_link_libraries(pathfinder_review_d3b_tests PRIVATE pathfinder::pathfinder GTest::gtest_main)
+pathfinder_set_warnings(pathfinder_review_d3b_tests)
+gtest_discover_tests(pathfinder_review_d3b_tests DISCOVERY_MODE PRE_TEST TEST_PREFIX "review_d3b.")

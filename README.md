@@ -522,7 +522,14 @@ the node counts on one instance); reversing the node-id tie-break (optimal eithe
 reset (it needs 2^32 scanned time steps) survive; dropping the scanner's last-step `break` is equivalent.
 
 The goal bound (`766d3da`) came after that review: it was checked by both space-time A\* oracles and the CBS oracles,
-and three mutants of it (one too high, one too low, added instead of taking the max) each fail a test.
+and three mutants of it (one too high, one too low, added instead of taking the max) each fail a test. A second round
+(at `d79e431`, on the goal bound and the review's fixes; tests in `tests/review_d3b/`) found no bug. It compared the
+search with its own oracle on 12,000 problems built around goal entries (at the horizon, beyond it, inside it, up to
+three on one goal, goals the agent starts on, behind walls; 126,000 more in its scratch sweep), checked that CBS with
+`max_nodes` = 1, 2, N - 1, N, N + 1 behaves exactly as documented on 384 tiny instances (1,806 runs), and that the
+expansion limits of both planners are exact. Of its 13 mutants 11 fail a test; the survivor that raises f only below
+the horizon is equivalent, which confirms the claim that late states never see the bound; and dropping the late-state
+re-push is caught only by day 2's walled oracle, as on day 2.
 
 ## Design decisions
 
