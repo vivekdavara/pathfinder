@@ -5,17 +5,15 @@
 #include <string>
 #include <utility>
 
-#include "pathfinder/distance.hpp"
 #include "pathfinder/heuristic.hpp"
 #include "pathfinder/planner.hpp"
 #include "pathfinder/reservation.hpp"
 #include "pathfinder/space_time_astar.hpp"
+#include "planner_common.hpp"
 
 namespace pathfinder {
 
 namespace {
-
-constexpr double kNoTimeLimitFrom = 1e9;
 
 std::vector<std::size_t> checked_order(const std::vector<std::size_t>& order, std::size_t agents) {
   if (order.empty()) {
@@ -47,9 +45,8 @@ PlanResult prioritized_planning(const Instance& instance, const PlannerLimits& l
   const Grid& grid = instance.grid;
   const std::size_t k = instance.agents.size();
   const std::vector<std::size_t> order = checked_order(order_in, k);
-  if (!(limits.time_limit_seconds >= 0)) {  // also NaN
-    throw std::invalid_argument("the time limit must be a number of seconds, 0 or more");
-  }
+  SearchLimits search;
+  search.deadline = detail::deadline_for(limits, started);
   PlanResult result;
   result.plan.assign(k, Path{});
   const auto finish = [&](PlanStatus status, std::size_t failed) {
@@ -64,20 +61,10 @@ PlanResult prioritized_planning(const Instance& instance, const PlannerLimits& l
   };
 
   // An agent that can't reach its goal alone makes the instance unsolvable for any planner: say so before searching.
-  const Components pieces = components(grid);
-  for (std::size_t i = 0; i < k; ++i) {
-    if (pieces.label[instance.agents[i].start] != pieces.label[instance.agents[i].goal]) {
-      return finish(PlanStatus::kUnreachableGoal, i);
-    }
+  if (const auto unreachable = detail::first_unreachable_agent(instance)) {
+    return finish(PlanStatus::kUnreachableGoal, *unreachable);
   }
 
-  SearchLimits search;
-  // (A limit of a billion seconds or more, infinity included, is no limit: converting it to the clock's integer
-  // ticks could overflow.)
-  if (limits.time_limit_seconds > 0 && limits.time_limit_seconds < kNoTimeLimitFrom) {
-    search.deadline = started + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-                                    std::chrono::duration<double>(limits.time_limit_seconds));
-  }
   const auto index = std::make_shared<const PassableIndex>(grid);
   ReservationTable table(grid);
   for (const std::size_t i : order) {
