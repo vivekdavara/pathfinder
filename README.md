@@ -153,7 +153,7 @@ examples/prioritized_vs_independent.py --agents 30 --seed 1`; CTest: `python.exa
 ## Results (day 3)
 
 Measured on an Apple M3, macOS 26.6.2, Apple Clang 21, on battery, with a review agent building in its own worktree
-(load 4 to 7): the timings carry that load; node, expansion and SOC counts don't depend on it. Every number comes from
+(load 4 to 8): the timings carry that load; node, expansion and SOC counts don't depend on it. Every number comes from
 the command next to it.
 
 - **CBS is optimal where it can be checked.** `tests/cbs_oracle_test.cpp` compares it with a brute-force optimum
@@ -194,7 +194,7 @@ the command next to it.
 
   CBS's SOC equals the lower bound (the agents' distances alone) on 17 of the 25 instances it solved; prioritized
   planning's on 7 of 30. Where CBS runs out of time at 30 agents it has generated 85,878 to 1,056,066 nodes. (These
-  are at `766d3da`, with space-time A\*'s goal bound, below. Before it, the solved counts were the same but CBS took
+  are at `766d3da`, with space-time A\*'s goal bound, above. Before it, the solved counts were the same but CBS took
   up to 176 ms at 20 agents and 1.5 s at 30, and prioritized planning's SOC came out slightly different, since the
   search now returns other equally short paths.)
 
@@ -220,13 +220,13 @@ the command next to it.
   BENCH_ARGS="'--benchmark_filter=Cbs|PrioritizedPlanning'"`, medians of 5, at `766d3da`): 0.321 ms (1 node, SOC
   495) / 1.06 ms (17 nodes, 2,318 expansions, SOC 1,019) / 2.47 ms (69 nodes, 5,879 expansions, SOC 1,265) at 10 /
   20 / 30 agents. Before the goal bound (at `3337cfe`): 0.265 / 5.94 / 11.9 ms with the same trees but 30,222 and
-  72,087 expansions. At 40 and 50 agents CBS didn't finish within 500,000 nodes (13.6 s and 9.1 s; Python probe,
-  before the goal bound).
+  72,087 expansions. At 40 and 50 agents CBS doesn't finish within 500,000 nodes, before or after the goal bound
+  (Python probe, `pf.cbs(inst, max_nodes=500_000, time_limit=20)`: 59.9M and 26.9M expansions, 19.6 s and 12.4 s at
+  load 5; before it 60.5M and 26.9M, 13.6 s and 9.1 s).
 - **The goal bound helps prioritized planning too**: the same benchmark's prioritized planning of 50 and 100 agents
   went from 14.9 and 23.0 ms (at `3337cfe`, matching day 2's 14.4-14.9 ms) to 3.58 and 6.68 ms, with SOC 2,272 and
   4,372 instead of 2,257 and 4,334 (other equally short paths change who is reserved where). The CVs of that run were
-  high at 10 and 50 agents (25% and 21%, load 5 to 8), so take the 4x as approximate; the expansion counts behind it
-  aren't load-dependent.
+  high at 10 and 50 agents (25% and 21%, load 5 to 8), so take the 4x as approximate.
 
 ## Results (day 2)
 
