@@ -230,8 +230,34 @@ found no path around the ones planned before it.
   test above. On an unsolvable instance whose goals are all reachable (two agents that must swap in a dead-end
   corridor) CBS can keep splitting for ever, so the node and time limits are part of its contract, not an
   afterthought.
+
+  **As built (day 3, `src/cbs.cpp`).**
+  - *A node stores only what it changed*: its parent, the one constraint it added, the agent it replanned and that
+    agent's new path, its SOC and its conflict scan. Its other constraints and paths are its ancestors'. A node's plan
+    is collected by walking up to the root, taking each agent's path from the nearest node that replanned it (else the
+    root's); an agent's constraints, by the same walk. A `std::deque` holds the nodes, so a plan can be a list of
+    pointers into it while the tree grows. The walk costs O(depth + k) per node, against copying k paths per node.
+  - *Each agent's distance table is built once* for the run (one per agent, sharing a `PassableIndex`), since any node
+    may replan any agent.
+  - *The low level* is day 2's space-time A\* with a fresh reservation table of the agent's constraints: a vertex
+    constraint is `forbid_vertex`, an edge constraint `forbid_move`. Nothing else was needed: the goal test already
+    handles constraints on the goal, and the late-state merging already bounds the search.
+  - *Conflicts* come from a `ConflictScanner` (`conflicts.hpp`): exactly the conflicts `validate()` reports, counted,
+    and the earliest (a vertex conflict at t, then a swap between t and t + 1, then (a, b)). It keeps an epoch-stamped
+    list per cell, sized once for the grid, instead of rebuilding a hash map at every time step: 23x to 34x faster
+    than `validate()` on the same plans (README "Results (day 3)"). Each child's plan is scanned when it is made, so
+    the open list can order by conflict count and the split needs no second scan.
+  - *Limits*: `max_nodes` (nodes generated, the root included), `max_expansions` (all low-level searches together)
+    and the time limit (checked before every low-level search and inside it). A child whose agent has no path under
+    its constraints is dropped; if the open list empties, no plan exists (`kNoPath`). The swap corridor shows that
+    this proof is rare: there each constraint only pushes a move later, so the tree never runs out.
+  - *Checked against*: a brute-force optimum (Dijkstra's algorithm over joint states, from the model alone,
+    `tests/cbs_oracle_test.cpp`): equal SOC on every one of 1,116 random tiny instances CBS finished, and never a plan
+    where the brute force proves there is none.
 - Later refinements, if time allows: choosing cardinal conflicts first, and a bypass. Each would be measured
-  against plain CBS, not assumed to help.
+  against plain CBS, not assumed to help. Day 3's measurements show where they would matter: on tiny dense
+  instances CBS needs a median of 3 nodes but 18,894 at the 99th percentile, and ten agents on the warehouse floor
+  take from 9 to 375,673 nodes depending on the seed.
 
 ## Python and the simulator (day 4)
 
@@ -264,6 +290,7 @@ flowchart LR
     STA["space-time A*"]
     PP["prioritized planning"]
     CBS["CBS<br/>(constraint tree)"]
+    SCAN["conflict scanner"]
     VAL["validate<br/>(the oracle)"]
   end
   subgraph outside["Front ends"]
@@ -282,6 +309,7 @@ flowchart LR
   STA --> CBS
   PP -- "planned paths" --> RES
   CBS -- "constraints" --> RES
+  SCAN -- "count, first conflict" --> CBS
   PP --> VAL
   CBS --> VAL
   core --> CLI
@@ -311,7 +339,9 @@ the start.
 - From day 2: every planner's every plan goes through the validator. Space-time A\* is compared with a brute-force
   oracle (the set of cells the agent can be in at each time, from the reservation table's answers alone) on random
   problems from two generators: its arrival must be the earliest, and "no path" exactly when there is none. CBS's
-  SOC (day 3) is compared with a brute-force search on tiny instances, and never above prioritized planning's.
+  SOC (day 3) is compared with a brute-force search on tiny instances, and never above prioritized planning's; the
+  conflict scanner is compared with `validate()` on random-walk plans. Every CBS call in a test has a node limit, so a
+  broken CBS fails a test instead of hanging it.
 
 ## Day plan
 
