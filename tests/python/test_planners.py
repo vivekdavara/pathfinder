@@ -118,3 +118,87 @@ def test_prioritized_planning_errors_and_other_statuses():
     with pytest.raises(ValueError, match="time limit"):
         pf.prioritized_planning(many, time_limit=-0.5)
     assert pf.prioritized_planning(pf.Instance(open_floor, []), order=[]).solved
+
+
+def test_cbs_solves_the_corridor_at_its_optimum():
+    g = corridor_room()
+    inst = pf.Instance(g, [pf.Agent(g.id(1, 0), g.id(3, 0)), pf.Agent(g.id(0, 1), g.id(4, 0))])
+    r = pf.cbs(inst)
+    assert r.solved and pf.validate(inst, r.plan).valid
+    assert (r.sum_of_costs, r.makespan) == (10, 5)  # tests/cbs_test.cpp derives it by hand
+    assert r.nodes_generated > r.nodes_expanded > 0
+    pp = pf.prioritized_planning(inst)
+    assert pp.nodes_generated == 0 and pp.nodes_expanded == 0  # prioritized planning has no tree
+
+
+def test_cbs_limits_and_statuses():
+    pair = pf.Instance(pf.Grid(2, 1), [pf.Agent(0, 1), pf.Agent(1, 0)])  # must swap: no plan
+    r = pf.cbs(pair, max_nodes=40)
+    assert r.status == pf.PlanStatus.LIMIT and r.nodes_generated <= 40
+    assert r.plan == [[], []] and r.sum_of_costs == 0
+    assert pf.cbs(pair, max_expansions=100).status == pf.PlanStatus.LIMIT
+    assert pf.cbs(pair, time_limit=0.02).status == pf.PlanStatus.LIMIT
+    split = pf.parse_map("type octile\nheight 1\nwidth 3\nmap\n.@.\n")
+    unreachable = pf.cbs(pf.Instance(split, [pf.Agent(0, 2)]))
+    assert unreachable.status == pf.PlanStatus.UNREACHABLE_GOAL and unreachable.failed_agent == 0
+    with pytest.raises(ValueError, match="time limit"):
+        pf.cbs(pair, time_limit=math.nan)
+    with pytest.raises(TypeError):
+        pf.cbs(pair, max_nodes=-1)
+    assert pf.cbs(pf.Instance(split, [])).solved
+
+
+def test_cbs_never_costs_more_than_prioritized_planning():
+    # Ten agents on the warehouse floor. CBS's effort varies wildly: seeds 1-5 took 8,309, 9, 77, 375,673 and 14,041
+    # nodes when this was written, so seed 4 stops at the limit here.
+    g = pf.warehouse_map()
+    solved = 0
+    for seed in range(1, 6):
+        inst = pf.make_instance(g, pf.random_scenario(g, 10, seed, "w.map"), 10)
+        pp = pf.prioritized_planning(inst)
+        r = pf.cbs(inst, max_nodes=20000)
+        if r.status == pf.PlanStatus.LIMIT:
+            continue
+        assert r.solved and pf.validate(inst, r.plan).valid
+        assert pp.solved and r.sum_of_costs <= pp.sum_of_costs
+        solved += 1
+    assert solved == 4
+
+
+def test_scan_conflicts_matches_validate():
+    g = pf.Grid(6, 1)
+    plan = [[0, 1], [2, 1, 0], [4, 5], [5, 4]]  # 0 and 1 meet in cell 1 at t = 1; 2 and 3 swap before that
+    count, first = pf.scan_conflicts(g, plan)
+    assert count == 2
+    assert (first.edge, first.a, first.b, first.time, first.cell, first.to) == (True, 2, 3, 0, 4, 5)
+    assert repr(first) == "Conflict(swap, a=2, b=3, time=0, cell=4, to=5)"
+    assert first == pf.scan_conflicts(g, plan)[1] and first != "a conflict"
+    inst = pf.Instance(g, [pf.Agent(p[0], p[-1]) for p in plan])
+    assert count == sum(1 for p in pf.validate(inst, plan).problems if "conflict" in str(p.kind).lower())
+    assert pf.scan_conflicts(g, [[0, 1, 2], [5, 4, 3]]) == (0, None)
+    with pytest.raises(ValueError, match="empty"):
+        pf.scan_conflicts(g, [[0], []])
+    with pytest.raises(IndexError):
+        pf.scan_conflicts(g, [[6]])
+
+
+def test_cbs_runs_in_threads_without_the_gil():
+    # cbs() releases the GIL: four threads planning one instance at once each get the plan it gets alone.
+    import threading
+
+    g = pf.warehouse_map()
+    inst = pf.make_instance(g, pf.random_scenario(g, 10, 1, "w.map"), 10)  # 8,309 nodes
+    alone = pf.cbs(inst, max_nodes=20000)
+    assert alone.solved
+    results = [None] * 4
+
+    def run(i):
+        results[i] = pf.cbs(inst, max_nodes=20000)
+
+    threads = [threading.Thread(target=run, args=(i,)) for i in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    for r in results:
+        assert r.solved and r.plan == alone.plan and r.nodes_generated == alone.nodes_generated

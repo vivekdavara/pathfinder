@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 
+#include "pathfinder/conflicts.hpp"
 #include "pathfinder/distance.hpp"
 #include "pathfinder/generate.hpp"
 #include "pathfinder/grid.hpp"
@@ -447,6 +448,8 @@ void bind_planners(py::module_& m) {
       .def_readonly("makespan", &PlanResult::makespan)
       .def_readonly("expansions", &PlanResult::expansions)
       .def_readonly("seconds", &PlanResult::seconds)
+      .def_readonly("nodes_generated", &PlanResult::nodes_generated)
+      .def_readonly("nodes_expanded", &PlanResult::nodes_expanded)
       .def_property_readonly("solved", [](const PlanResult& r) { return r.status == PlanStatus::kSolved; });
   m.def(
       "prioritized_planning",
@@ -464,6 +467,43 @@ void bind_planners(py::module_& m) {
       },
       "instance"_a, "max_expansions"_a = 0, "time_limit"_a = 0.0, "order"_a = py::none(),
       "Prioritized planning: agents one at a time in `order` (default: the instance's), each around those before.");
+  m.def(
+      "cbs",
+      [](const Instance& instance, std::uint64_t max_expansions, double time_limit, std::uint64_t max_nodes) {
+        PlannerLimits limits;
+        limits.max_expansions = max_expansions;
+        limits.time_limit_seconds = time_limit;
+        limits.max_nodes = max_nodes;
+        py::gil_scoped_release release;  // safe for the same reason as prioritized_planning's
+        return cbs(instance, limits);
+      },
+      "instance"_a, "max_expansions"_a = 0, "time_limit"_a = 0.0, "max_nodes"_a = 0,
+      "Conflict-based search: a plan of minimum sum of costs. 0 for a limit means none; on an unsolvable instance "
+      "whose goals are all reachable only a limit stops it.");
+
+  py::class_<Conflict>(m, "Conflict")
+      .def_readonly("edge", &Conflict::edge)
+      .def_readonly("a", &Conflict::a)
+      .def_readonly("b", &Conflict::b)
+      .def_readonly("time", &Conflict::time)
+      .def_readonly("cell", &Conflict::cell)
+      .def_readonly("to", &Conflict::to)
+      .def("__eq__", [](const Conflict& x, const Conflict& y) { return x == y; }, py::is_operator())
+      .def("__repr__", [](const Conflict& c) {
+        return std::string(c.edge ? "Conflict(swap" : "Conflict(vertex") + ", a=" + std::to_string(c.a) +
+               ", b=" + std::to_string(c.b) + ", time=" + std::to_string(c.time) + ", cell=" +
+               std::to_string(c.cell) + (c.edge ? ", to=" + std::to_string(c.to) : std::string()) + ")";
+      });
+  m.def(
+      "scan_conflicts",
+      [](const Grid& grid, const Plan& plan) {
+        ConflictScanner scanner(grid.cell_count());
+        const ConflictScan scan = scanner.scan(plan);
+        return py::make_tuple(scan.count, scan.first ? py::cast(*scan.first) : py::none());
+      },
+      "grid"_a, "plan"_a,
+      "(count, first): the plan's vertex and edge conflicts as validate() counts them, and the earliest (None if "
+      "there are none). Every path must be non-empty and on the grid.");
 }
 
 }  // namespace
