@@ -32,6 +32,7 @@ add_library(pathfinder STATIC
   src/heuristic.cpp
   src/instance.cpp
   src/movingai.cpp
+  src/conflicts.cpp
   src/plan.cpp
   src/plan_file.cpp
   src/prioritized.cpp
