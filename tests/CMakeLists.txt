@@ -63,3 +63,10 @@ add_executable(pathfinder_review_d2c_tests review_d2c/review_d2c_test.cpp)
 target_link_libraries(pathfinder_review_d2c_tests PRIVATE pathfinder::pathfinder GTest::gtest_main)
 pathfinder_set_warnings(pathfinder_review_d2c_tests)
 gtest_discover_tests(pathfinder_review_d2c_tests DISCOVERY_MODE PRE_TEST TEST_PREFIX "review_d2c.")
+
+# The day-3 review's tests (tests/review_d3/, at ee6d2ef): each ReviewD3 test failed there; ReviewD3Clean checks
+# passed there and are kept for their coverage.
+add_executable(pathfinder_review_d3_tests review_d3/review_d3_test.cpp)
+target_link_libraries(pathfinder_review_d3_tests PRIVATE pathfinder::pathfinder GTest::gtest_main)
+pathfinder_set_warnings(pathfinder_review_d3_tests)
+gtest_discover_tests(pathfinder_review_d3_tests DISCOVERY_MODE PRE_TEST TEST_PREFIX "review_d3.")

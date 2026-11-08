@@ -112,8 +112,7 @@ TEST(Cbs, TwoAgentsThatMustSwapInACorridorRunIntoTheLimits) {
   const Instance inst = instance_of(g, {{{0, 0}, {1, 0}}, {{1, 0}, {0, 0}}});
   PlanResult r = cbs(inst, node_limit(500));
   EXPECT_EQ(r.status, PlanStatus::kLimit);
-  EXPECT_LE(r.nodes_generated, 500U);
-  EXPECT_GE(r.nodes_generated, 499U);  // the last split may stop between its two children
+  EXPECT_EQ(r.nodes_generated, 500U);  // it stops at the first child it can't add, so exactly at the limit
   for (const Path& p : r.plan) {
     EXPECT_TRUE(p.empty());
   }
@@ -155,6 +154,23 @@ TEST(Cbs, StopsAtTheTimeLimitBeforeTheFirstSearch) {
   const PlanResult r = cbs(inst, limits);
   EXPECT_EQ(r.status, PlanStatus::kLimit);
   EXPECT_EQ(r.expansions, 0U);
+}
+
+// The clock is checked before each agent's distance table, not only before searching: 300 tables on a 400 x 400 map
+// take far longer than the limit (each is a BFS over 160,000 cells), and the run must stop near it.
+TEST(Cbs, StopsAtTheTimeLimitWhileBuildingDistanceTables) {
+  const Grid g(400, 400);
+  Instance inst{g, {}};
+  for (CellId i = 0; i < 300; ++i) {
+    inst.agents.push_back(Agent{i * 2, static_cast<CellId>(g.cell_count() - 1 - i * 2)});
+  }
+  check_instance(inst);
+  PlannerLimits limits = bounded();
+  limits.time_limit_seconds = 0.02;
+  const PlanResult r = cbs(inst, limits);
+  EXPECT_EQ(r.status, PlanStatus::kLimit);
+  EXPECT_EQ(r.expansions, 0U);
+  EXPECT_LT(r.seconds, 0.5);
 }
 
 TEST(Cbs, TheNodeAndExpansionLimitsAreExact) {

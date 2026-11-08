@@ -87,11 +87,15 @@ PlanResult cbs(const Instance& instance, const PlannerLimits& limits) {
     return finish(PlanStatus::kUnreachableGoal, *unreachable);
   }
 
-  // One distance table per agent for the whole run: any node may replan any agent.
+  // One distance table per agent for the whole run: any node may replan any agent. The clock is checked before each
+  // (on a large map with many agents, building them all could otherwise overrun a short limit: the day-3 review).
   const auto index = std::make_shared<const PassableIndex>(grid);
   std::vector<DistanceTable> h;
   h.reserve(k);
   for (const Agent& a : instance.agents) {
+    if (search.deadline && std::chrono::steady_clock::now() >= *search.deadline) {
+      return finish(PlanStatus::kLimit, 0);
+    }
     h.emplace_back(grid, index, a.goal);
   }
   // One low-level search for `agent` within what the limits have left; its path into `out` when found.
@@ -182,9 +186,6 @@ PlanResult cbs(const Instance& instance, const PlannerLimits& limits) {
         {c.b, c.edge ? Constraint{c.to, c.cell, c.time} : Constraint{c.cell, kNone, c.time}},
     }};
     for (const auto& [agent, constraint] : sides) {
-      if (!may_generate()) {
-        return finish(PlanStatus::kLimit, 0);
-      }
       // The agent's constraints: the new one and every one on the way up to the root.
       ReservationTable table(grid);
       const auto add = [&table](const Constraint& x) {
@@ -207,6 +208,12 @@ PlanResult cbs(const Instance& instance, const PlannerLimits& limits) {
       }
       if (low == Low::kNoPath) {
         continue;  // no plan satisfies this child's constraints: nothing to add
+      }
+      // Room for the child? Asked only now that it exists: checked before the search, a child with no path, which is
+      // never generated, still used up the limit, and a run allowed exactly the nodes it needed gave up one split
+      // short of its solution (the day-3 review).
+      if (!may_generate()) {
+        return finish(PlanStatus::kLimit, 0);
       }
       collect_plan(n);
       child.soc = tree[n].soc - cost_of(agent, *plan[agent]) + cost_of(agent, child.path);
