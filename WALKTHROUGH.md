@@ -2,7 +2,7 @@
 
 The questions an interviewer is likely to ask about this project, with short answers that point at the code. Day 1
 covers the model, the formats, the generators and the validator; day 2 the single-agent search and the baseline
-planner; later days add CBS, the benchmarks and the visualizer.
+planner; day 3 conflict-based search; later days add the benchmarks and the visualizer.
 
 ## In two minutes
 
@@ -12,7 +12,11 @@ seeded generators for random and warehouse floors, and `validate`, an independen
 planner will go through. Running the readers on the real benchmark set (690,275 start-goal pairs) turned up one wrong
 assumption of mine about the files, which is now documented, tested and handled. Day 2 added space-time A\* (one
 agent around reservations), checked against a brute-force oracle, and prioritized planning, the baseline that CBS
-will be measured against: fast, valid by construction, and visibly incomplete once the floor gets crowded.
+will be measured against: fast, valid by construction, and visibly incomplete once the floor gets crowded. Day 3
+added conflict-based search: it returns plans of minimum sum of costs, which a brute-force search over joint states
+confirms on every tiny instance it finishes, and it shows the classic trade: plans 2% to 6% cheaper on average than
+prioritized planning's on the benchmark maps (up to 23%), but an effort that ranges from 9 to 375,673 tree nodes for
+ten agents on the same floor.
 
 ## The model
 
@@ -198,6 +202,71 @@ number in the index; precomputing each passable cell's neighbours by number made
 all-cells BFS instead (0.36 against 0.65 ms on orz900d). Prioritized planning holds one table at a time anyway;
 it's for CBS, which keeps one per agent.
 
+## Conflict-based search (day 3)
+
+**How does CBS work, in one breath?**
+Plan every agent alone (the root). Take the node with the lowest sum of costs, find the first collision in its plan
+(agents a and b in cell v at time t, or swapping), and make two children: one where a may not be in v at t, one where
+b may not. Each child replans only its constrained agent, by the same space-time A\* as day 2, with that agent's
+constraints as its reservation table. The first node popped with no collision is the answer (`src/cbs.cpp`).
+
+**Why is the answer optimal?**
+Two facts. Every valid plan obeys at least one child's constraints at every split (a and b can't both be in v at t
+in a valid plan), so splitting never throws a valid plan away. And a node's SOC never decreases from parent to child
+(the child replans one agent under more constraints, and the low level returns that agent's cheapest path). So the
+open list, ordered by SOC, reaches the cheapest valid plan before any more expensive node. What makes the second fact
+true is the low level being exactly optimal, which day 2's oracle test pins.
+
+**How do you know it's right?**
+`tests/cbs_oracle_test.cpp`: a brute-force optimum that knows nothing about trees or A\*. It is Dijkstra over joint
+states, every agent's cell plus whether it's done, where an agent costs 1 per step until it declares itself done on
+its goal. That models "cost is the final arrival" without tracking time, so the state space is finite and the search
+proves unsolvability too. On 1,500 random tiny instances, CBS's SOC equals it on all 1,116 that CBS finishes in
+3,000 nodes, and CBS never returns a plan where the brute force proves none exists. Six of seven mutants (a swap
+constraint pointing the wrong way, ignoring SOC in the open list, forgetting ancestor constraints, ...) fail it or
+the hand-derived cases in `tests/cbs_test.cpp`; the seventh, preferring more conflicts among equal-SOC nodes, only
+changes how fast CBS gets there.
+
+**What's subtle about goals?**
+A finished agent sits on its goal for ever, so another agent walking through it is a conflict at a time after the
+first agent's path ended. CBS splits it like any vertex conflict, and the child that forbids the parked agent from
+its goal at t forces its path to end after t. That needed no new code: the low-level goal test from day 2 already
+says "a path ends only after the last constraint on the goal" (`AnAgentOnItsGoalStepsAsideAndComesBack`: SOC 4,
+worked out by hand in the test's comment).
+
+**What does a node store?**
+Only what it changed: its parent, its one new constraint, the agent it replanned and that agent's new path. A plan
+is assembled by walking up to the root, taking each agent's path from the nearest node that replanned it; an agent's
+constraints come from the same walk. The nodes live in a `std::deque`, so a plan can be a vector of pointers into
+the tree while it grows. The alternative, a full copy of k paths per node, costs memory the tree needs for nodes.
+
+**Why a separate conflict scanner instead of calling validate()?**
+CBS looks at every node's plan, so this is its inner loop. `validate()` rebuilds a hash map of occupants at every
+time step and reports everything in a fixed order; the scanner keeps one list per cell, stamped with an epoch so
+nothing is cleared between time steps or plans, and keeps only the count and the earliest conflict. It finds
+exactly validate()'s conflicts (3,000 random-walk plans, one scanner reused across all of them) and is 23x to 34x
+faster (`make bench`). The count is the open list's tie-break: among nodes of equal SOC, the one closest to valid
+first.
+
+**When does CBS give up, and can it prove there's no plan?**
+Two agents that must swap in a dead end: no plan exists, but each constraint only pushes a move one step later, so
+the tree never runs out. That's why the node, expansion and time limits are part of the contract and every CBS call
+in the tests has a node limit (a broken CBS then fails a test instead of hanging CI). If the open list does empty,
+that is a proof (every child was infeasible), reported as `kNoPath`; on 226 unsolvable tiny instances it never
+happened, so in practice "unsolvable" shows up as a limit.
+
+**How does it compare with prioritized planning?**
+On random-32-32-20 and warehouse-10-20-10-2-1 (MovingAI scenarios 1-5): both solve every 10- and 20-agent case,
+CBS in at most 176 ms; prioritized planning's SOC is 2% to 6% above CBS's on average and up to 23%. At 30 agents
+prioritized planning still solves all of them in milliseconds, CBS only 2 and 3 of 5 within 10 s. That's the trade
+the project exists to measure (day 4 does it properly, across agent counts).
+
+**Why is CBS's effort so uneven?**
+Ten agents on the same warehouse floor took 9, 77, 8,309, 14,041 or 375,673 nodes depending on the seed. When two
+agents meet in a corridor, both children usually cost the same, and the conflict reappears a step later, so the tree
+fills with ties. The known fix is to split on cardinal conflicts first (ones where both children must cost more,
+found from each agent's graph of optimal paths); it's on the list as a measured refinement, not an assumption.
+
 ## The review
 
 **How was day 1 reviewed?**
@@ -276,6 +345,5 @@ library as `pathfinder._core` with C++ exceptions mapped to Python ones (`ParseE
 
 ## What's next
 
-**What's subtle about CBS and goals?**
-A vertex constraint on an agent's goal at time t means its path can't end there before t + 1, because it would then
-sit on the goal at t. The low-level goal test is "at the goal, at a time after which no constraint covers the goal".
+Day 4: success rate, runtime and SOC against the number of agents for both planners on the benchmark maps, and a
+step-by-step simulator in Python. Day 5: a replay visualizer, the final results and v1.0.0.
