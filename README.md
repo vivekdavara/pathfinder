@@ -655,6 +655,18 @@ re-push is caught only by day 2's walled oracle, as on day 2.
   The oracle stays simple and separate.
 - **CBS's limits are part of its contract** (day 3): an unsolvable instance whose goals are reachable usually never
   exhausts the tree, so every caller passes a node, expansion or time limit, and so does every test.
+- **Delays are absorbed by keeping the plan's order, not by replanning** (day 4): the ordered policy (the plan's action
+  dependency graph) needs no search, can't collide or deadlock (DESIGN.md has the arguments, the tests have the
+  checks), and costs an undelayed plan nothing. Replanning on every delay could do better, but puts a planner that can
+  fail or time out inside the control loop.
+- **The simulator is Python on the bindings** (day 4): a run is a few thousand robot-steps, not a hot path, and the
+  checks that matter are the library's (`validate`, the conflict scanner), which the simulator's own step checks are
+  tested against.
+- **Wall-time limits per try in the sweep, recorded with node counts** (day 4): "solved within 5 s" is what an
+  operator cares about and is the MAPF benchmarks' convention (usually with longer limits); each try's nodes and
+  expansions go to the JSONL too, for comparisons that don't depend on the machine.
+- **Paired comparisons only** (day 4): SOC ratios are over the instances both planners solve, and the delay experiment
+  uses only those instances, so a planner isn't flattered by solving only the easy ones.
 - **The benchmark set is fetched, not committed**, and checked by SHA-256 before anything is unpacked; the unpacker
   writes only `.map`/`.scen` files to plain paths under `data/`.
 
@@ -671,6 +683,12 @@ re-push is caught only by day 2's walled oracle, as on day 2.
 - A reservation table is hash sets behind a byte per cell that says whether anything names the cell: with 50 planned
   paths in it, an expansion still costs nearly twice as much as with an empty table (`BM_SpaceTimeAStar`), because
   around planned paths most cells are named. Per-cell sorted lists of times would be the next step if it matters.
+- The simulator's delays are whole steps, independent per robot and step, with the delayed robot holding its cell; no
+  slow robots, breakdowns that last, or correlated delays (one aisle blocked). The ordered policy never reorders robots
+  at a cell, so one long delay holds up every robot queued behind it there even when letting them go first would cost
+  less (switchable dependency graphs are the known refinement).
+- The sweep's 5 s per try is short next to the 60 s or more common in MAPF papers, so CBS's success rates are lower
+  bounds for longer limits, and they moved a little with machine load (README "Results (day 4)").
 - The time limit is checked every 1,024 expansions, so a run can overshoot it by that much work.
 - Movement is 4-connected only, with unit costs; MovingAI's terrain types other than passable/blocked (`S`, `W`) are
   folded into those two (the MAPF maps use only `.`, `@` and `T`).
