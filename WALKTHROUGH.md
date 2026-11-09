@@ -283,6 +283,42 @@ returned had changed. When two agents meet in a corridor, both children usually 
 reappears a step later, so the tree fills with ties. The known fix is to split on cardinal conflicts first (ones where both children must cost more,
 found from each agent's graph of optimal paths); it's on the list as a measured refinement, not an assumption.
 
+## The benchmarks (day 4)
+
+**What did you measure, and how?**
+`scripts/sweep.py`: both planners on the first k agents of each of the 25 MovingAI random scenarios of four maps
+(empty-32-32, random-32-32-20, room-32-32-4, warehouse-10-20-10-2-1), k = 10 to 100, 5 s per try. Solved means a
+valid plan within the limit (prioritized planning's "no path" counts as a failure: it's incomplete). Every plan goes
+through `validate()` and is checked against the lower bound; SOC comparisons use only the instances both planners
+solve; and once a planner solves none at some k it isn't tried beyond. Every try is a JSON record in
+`results/day4/`, and `scripts/sweep_summary.py` rebuilds the README's table from them.
+
+**What did it show?**
+The textbook trade, with numbers. Prioritized planning answers in milliseconds at every size and solves all 25
+scenarios up to 100 agents on the empty map, 21 of 25 on random-32-32-20 at 100; it suffers only where the map has
+choke points (room-32-32-4: 19 of 25 at 30 agents, 1 of 25 at 90). CBS solves everything small and then falls off a
+cliff: on empty-32-32 25, 23, 17, 14, 9, 5, 1, 0 of 25 from 10 to 80 agents; on random-32-32-20 25, 25, 9, 1, 0 from 10
+to 50; on room-32-32-4 24, 12, 0 from 10 to 30. Where both solve, prioritized planning's plans cost more, and more as
+the map fills: on empty-32-32 0.5% more on average at 10 agents, 9.3% at 50 (up to 17.6% on one instance).
+
+**Why does CBS fail on an empty map, where the answer is nearly the lower bound?**
+On empty-32-32 its solved plans are at the lower bound on 24 of 25 instances at 10 agents and within 0.07% at every
+size, so the optimum is easy to describe; CBS just can't prove it. Two robots whose shortest paths cross on an open
+grid have many equally short ways to dodge, and each split's two children usually cost the same, so the tree fills
+with ties (the known "rectangle" symmetry). Failures had generated a median of about 80,000 nodes a second when the
+limit stopped them.
+
+**Would a longer time limit help?**
+Not much, by this data: of the 235 tries CBS solved on the three 32 x 32 maps, 204 took under 10 ms and only 9 took
+between 1 and 5 s. It's bimodal: an instance is easy or it's hopeless for plain CBS. That's a measurement of this
+sweep, not a proof; the fix that matters is algorithmic (cardinal conflicts first, symmetry reasoning), not seconds.
+
+**So which planner would you deploy?**
+For a live warehouse, prioritized planning (or a bounded-suboptimal search) plus ordered execution: it answers in
+milliseconds, its plans cost a few percent more, and the ordered execution absorbs the delays any plan will meet.
+CBS is the right tool for small groups, for offline planning, and as the yardstick that tells you what those few
+percent are.
+
 ## The simulator (day 4)
 
 **What is the simulator for?**
@@ -316,8 +352,16 @@ survives is chains of followers and closed cycles (`test_ordered_moves_a_rotatio
 Exactly the plan, robot by robot. Two facts squeeze it: with no delays every move happens no later than planned (by
 induction on planned time), so no robot's cost goes up; and the trajectories driven are themselves a valid plan, which
 can't cost less than CBS's optimum. The test checks it on every CBS plan it makes. For prioritized planning the
-guarantee is only "no later", and I expected dropped waits to make some robots early; none ever was, because each
-path is the earliest arrival around the robots before it, so its waits are needed in that order. The test now says so.
+guarantee is only "no later".
+
+**Tell me about a claim of yours that turned out false.**
+Prioritized planning's plans under the ordered policy. I expected dropped waits to make some robots early, saw none
+on 14 plans, and wrote down why: each path is the earliest arrival around the robots planned before it, so its waits
+are all needed. The review broke it with a 9-agent instance where one robot arrives a step early. My argument was
+true only against the earlier robots' *planned* timing, and the ordered policy changes that timing: robot 3's wait is
+dropped, so a cell frees a step early, and robot 6, which was waiting for that cell, gets in sooner. It's rare (15
+robots among 556,778 in the reviewer's random search), but "rare" isn't "never", and the docs said never. Fourteen
+examples were never a proof; the argument was the thing to check.
 
 **How do you know the simulator's own checks are right?**
 They're compared with two independent checks in the library. On 40 delayed timetable runs, the collisions the
@@ -435,5 +479,8 @@ library as `pathfinder._core` with C++ exceptions mapped to Python ones (`ParseE
 
 ## What's next
 
-Day 4: success rate, runtime and SOC against the number of agents for both planners on the benchmark maps, and a
-step-by-step simulator in Python. Day 5: a replay visualizer, the final results and v1.0.0.
+Day 5: a replay visualizer (the simulator's trajectories drawn step by step, delays and all), the final results and
+v1.0.0. Candidate refinements, each to be measured against what's here rather than assumed to help: cardinal
+conflicts first in CBS (the sweep's failures are symmetric conflicts on maps where the optimum is the lower bound),
+and letting the ordered execution swap two robots' order at a cell when the one ahead is delayed (a switchable
+dependency graph).

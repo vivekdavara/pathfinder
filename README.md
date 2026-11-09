@@ -198,7 +198,8 @@ collision and delay counts don't depend on load. Every number comes from the com
 - **Ordered execution behaves as argued** (DESIGN.md "Python and the simulator"): on 13 CBS plans x 5 seeds at
   each of 5%, 20% and 50% delays, never a collision or a deadlock, the trajectories valid, SOC never below CBS's, and
   every cell visited in the plan's order; undelayed, every CBS plan's execution costs exactly the plan, robot by robot,
-  and on 14 prioritized plans no robot arrives later than planned (none earlier either).
+  and on 14 prioritized plans no robot arrives later than planned (none earlier either, on those 14; but it can
+  happen: see "Review of day 4").
 - **What delays do to a plan** (`scripts/delays.py`, command under "How to run"; warehouse-10-20-10-2-1, 20 agents,
   the 23 of 25 scenarios both planners solve within 5 s, 20 delay seeds per plan and probability, so 460 runs a row).
   As a timetable, one robot-step of delay in a hundred (each robot delayed with p = 0.01 at each step: about 16
@@ -632,6 +633,40 @@ three on one goal, goals the agent starts on, behind walls; 120,000 more in its 
 expansion limits of both planners are exact. Of its 13 mutants 12 fail a test; the survivor, which raises f only below
 the horizon, is equivalent, which confirms the claim that late states never see the bound; and dropping the late-state
 re-push is caught only by day 2's walled oracle, as on day 2.
+
+## Review of day 4
+
+One agent in its own worktree at `ed1cf44` (the simulator, its tests, `sweep.py` and `delays.py`), about 11:27 to
+11:45, asked for correctness bugs with a failing test for each. **No bug.** Its 14 tests are in
+`tests/python/review_d4/` (all pass; 4.6 s):
+
+- **A claim of mine was false.** DESIGN.md said no prioritized-planning robot could arrive earlier than planned under
+  the ordered policy, since each path is the earliest arrival around the robots planned before it. That holds only
+  against their *planned* timing, which the ordered policy changes. Counterexample (`pf.random_map(8, 8, 20,
+  429054828)`, 9 agents of `pf.random_scenario(grid, 9, 592240811, ...)`): robot 3's wait is dropped, a cell frees a
+  step early, and robot 6 arrives at 9 instead of 10 (SOC 69 against 70). Its random search found 15 such robots
+  among 556,778 in about 51,000 plans (random agent orders), and this one in 1,268 default-order plans. DESIGN.md,
+  WALKTHROUGH.md and a test comment are corrected. (So PP's "SOC added per robot-step of delay" in the delay tables
+  includes a very small saving from dropped waits.)
+- **Overstated**: DESIGN.md said every ordered-policy guard was tested by breaking a queue; only the swap and
+  deadlock guards were. Its tests now force a collision and an illegal move through the step checks.
+- **Wording**: `run()`'s bound is ten times the longest path's length (not the makespan) plus 1,000; `finished()` under
+  the timetable means "at its path's last entry"; a `random_delays` schedule is one stream, so each run needs its own.
+  All three docstrings fixed.
+- **Mutants**: 8 of simulator.py survived `test_simulator.py` (the timetable's `moved` filter, `random_delays` drawing
+  only for unfinished robots, `makespan` as min, the jump check off, a swap recorded backwards, the ordered collision
+  raise off, both `finished()` rules); its tests kill all 8, and 34 of its 35 with both files (the survivor is an
+  allowed rule: a seed per step instead of one stream).
+- **Clean**: the ordered policy step by step against its own independent dependency-graph executor (a list of each
+  visit's earlier visitors), with adversarial delay schedules (delay whoever could move, everyone but one, long
+  bursts): 260,064 runs on 5,646 small dense instances (CBS plans, PP plans in random orders, plans with waits put in),
+  and 8,754 runs of PP plans with 20 to 80 agents: same moves, same positions, valid trajectories, the plan's visit
+  order kept, never a step with nobody delayed and nobody moving. The timetable against an independent replay, every
+  collision field against `validate()`. `sweep.py`'s medians, give-up and exit codes with the planners' clocks
+  replaced by known values; `delays.py`'s columns recomputed.
+- **Script caveats it noted**, fixed after: `sweep.py`'s give-up assumed ascending `--agents`, `--time-limit 0`
+  meant no limit, and a CBS SOC of 0 would divide by zero; `delays.py` at `ed1cf44` compared the planners on
+  different instance sets (already paired in `1ed3e42`).
 
 ## Design decisions
 

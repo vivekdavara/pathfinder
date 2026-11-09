@@ -142,7 +142,9 @@ class Simulator:
         return len(self._paths)
 
     def finished(self, robot: int) -> bool:
-        """Whether the robot has done everything its plan asks (it is at its goal and stays there)."""
+        """Whether the robot has done everything its plan asks: under the timetable, it is at its path's last entry
+        (a path that waits on its goal before ending isn't finished until its end); ordered, it has made its last
+        visit, to its goal."""
         if self.policy == "timetable":
             return self._index[robot] == len(self._paths[robot]) - 1
         return self._visit[robot] == len(self._cells[robot]) - 1
@@ -185,7 +187,7 @@ class Simulator:
 
     def run(self, delays: DelaySchedule | None = None, max_steps: int | None = None) -> Execution:
         """Steps until every robot is finished, or ``max_steps`` steps have been executed in all (default: no bound for
-        a run without delays, which always finishes; ten times the plan's makespan plus 1,000 with them)."""
+        a run without delays, which always finishes; with them, ten times the longest path's length plus 1,000)."""
         if max_steps is None and delays is not None:
             max_steps = 10 * max((len(p) for p in self._paths), default=0) + 1000
         while not self.done and (max_steps is None or self.time < max_steps):
@@ -336,7 +338,8 @@ def delay_robot(robot: int, at: int, steps: int = 1) -> DelaySchedule:
 def random_delays(probability: float, seed: int) -> DelaySchedule:
     """A schedule delaying each robot at each step with ``probability``, independently. A draw is made for every robot
     at every step, finished or not, so two runs with the same seed see the same delays at the same steps whatever the
-    policy (a draw for a finished robot just doesn't apply)."""
+    policy (a draw for a finished robot just doesn't apply). The draws come from one stream, one call per step, so
+    give each run its own schedule: a schedule used for a second run carries on where the first left off."""
     if not 0 <= probability <= 1:
         raise ValueError("the probability must be between 0 and 1")
     rng = random.Random(seed)

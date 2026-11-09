@@ -229,9 +229,9 @@ def test_ordered_execution_of_an_optimal_plan_costs_exactly_the_plan():
 
 
 def test_ordered_execution_never_makes_a_robot_later_than_planned():
-    # The guarantee is "no later". On prioritized planning's plans it comes out "exactly on time" for every robot
-    # here: each path is the earliest arrival around the robots planned before it, so its waits are all needed in
-    # the order the plan fixes (a first version of this test expected some to be dropped, and none ever was).
+    # The guarantee is "no later". On these 14 plans every robot comes out exactly on time, but earlier is possible:
+    # the day-4 review found a plan where one robot arrives a step early (tests/python/review_d4/, the claim test),
+    # because dropping an earlier robot's wait can free a cell before the plan said.
     solved = 0
     for instance in list(warehouse_instances(30, range(1, 6))) + list(random_instances(25, range(1, 11))):
         result = pf.prioritized_planning(instance)

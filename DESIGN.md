@@ -307,12 +307,16 @@ that use it.
     planned time, which can move by the same argument; the chain ends at an empty cell or closes into a rotation).
   - *Never later than planned* with no delays: by induction on planned time, every move happens no later than the
     plan has it. So an undelayed run of a CBS plan costs exactly the plan (it can't cost more, and no valid plan costs
-    less), and of a prioritized plan no robot arrives later. (On prioritized planning's plans none arrived earlier
-    either: each path is the earliest arrival around those planned before it, so its waits are all needed in the
-    order the plan fixes.)
+    less), and of a prioritized plan no robot arrives later. A prioritized plan's robot can arrive *earlier*, though
+    rarely: each path is the earliest arrival around the robots planned before it *on their planned timing*, and the
+    ordered policy changes that timing (dropping an earlier robot's wait can free a cell a step early for a later
+    one). I first wrote here that none could, from 14 plans where none did; the day-4 review found a 9-agent
+    instance where one robot arrives a step early (SOC 69 against 70) and 15 such robots among 556,778 in about
+    51,000 plans (`tests/python/review_d4/`).
 
   A collision, a swap or a deadlock under this policy would break these arguments, so each raises `SimulationError`
-  (tested by breaking a queue by hand) instead of being recorded.
+  instead of being recorded: the swap and deadlock guards are tested by breaking a cell's queue by hand, the collision
+  and illegal-move checks by forcing a bad step (the day-4 review's tests).
 
 ## Measurements (day 4)
 
