@@ -92,6 +92,9 @@ def main(argv: list[str] | None = None) -> int:
         p.error("--time-limit must be more than 0 and less than a billion seconds")
     # Ascending, so "solved none at k" can stop a planner at every larger k (the day-4 review: the give-up assumed it).
     args.agents = sorted(set(args.agents))
+    # Each map once, in the order given: a map named twice would write every try twice, which sweep_summary.py
+    # refuses (the day-4 review's third round).
+    args.maps = list(dict.fromkeys(args.maps))
 
     numbers = scenario_numbers(args.scenarios)
     out = args.jsonl.open("w") if args.jsonl else None

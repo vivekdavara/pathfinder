@@ -81,6 +81,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--time-limit", type=float, default=5.0, help="seconds per planner call")
     p.add_argument("--single", nargs="*", type=int, default=[1, 3], help="delay lengths for experiment 2")
     args = p.parse_args(argv)
+    if not 0 < args.time_limit < 1e9:
+        # As in sweep.py: 0, and a billion seconds or more, mean "no limit" to the planners, and CBS on an unsolvable
+        # instance whose goals are reachable never stops (the day-4 review's third round: only sweep.py checked).
+        p.error("--time-limit must be more than 0 and less than a billion seconds")
 
     plans: dict[str, list[tuple[pf.Instance, pf.PlanResult]]] = {"pp": [], "cbs": []}
     tried = 0
