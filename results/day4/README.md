@@ -3,8 +3,8 @@
 The outputs behind README "Results (day 4)", as the scripts printed them. Measured on 2026-11-09 on an Apple M3,
 macOS 26.6.2, Apple Clang 21 (the `release` preset's module), Python 3.11.12, on battery; the MovingAI maps and random
 scenarios from `make maps`. The sweeps ran one try at a time on one core, alongside a review agent in its own
-worktree and the delay experiments (load averages 4 to 8), so times near the 5 s limit carry that load. Every sweep
-map printed "asleep for 0 s of it" (`sweep.err`).
+worktree and the delay experiments (load averages 4 to 8), so times near the 5 s limit carry that load. Every
+map of all three sweeps printed "asleep for 0 s of it" (`sweep.err`, `sweep_generated.err`, `sweep_pp_large.err`).
 
 | File | Command (with `PYTHONPATH=build/release/python .venv/bin/python`) | Code |
 |---|---|---|

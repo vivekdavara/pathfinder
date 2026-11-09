@@ -307,10 +307,10 @@ the map fills: on empty-32-32 0.5% more on average at 10 agents, 9.3% at 50 (up 
 
 **Why does CBS fail on an empty map, where the answer is nearly the lower bound?**
 On empty-32-32 its solved plans are at the lower bound on 24 of 25 instances at 10 agents and on 81 of the 94 it
-solved at any size, never more than 0.6% above it, so the optimum is easy to describe; CBS just can't prove it. Two robots whose shortest paths cross on an open
-grid have many equally short ways to dodge, and each split's two children usually cost the same, so the tree fills
-with ties (the known "rectangle" symmetry). It isn't slow per node: about 71,000 nodes a second, and its failures had
-a median of 354,684 nodes when the limit stopped them.
+solved at any size, never more than 0.6% above it, so the optimum is easy to describe; CBS just can't prove it. Two
+robots whose shortest paths cross on an open grid have many equally short ways to dodge, and each split's two children
+usually cost the same, so the tree fills with ties (the known "rectangle" symmetry). It isn't slow per node: a median
+of about 71,000 nodes a second per try, and its failures had a median of 354,684 nodes when the limit stopped them.
 
 **Would a longer time limit help?**
 Not much, by this data: of the 269 tries CBS solved, 228 took under 10 ms and only 11 took between 1 and 5 s. It's bimodal: an instance is easy or it's hopeless for plain CBS. That's a measurement of this
@@ -343,13 +343,17 @@ before has left. No head-on swap: if i (in u) and j (in v) could both move, j's 
 i's to u just before j's, which in the plan forces them to leave at the same step, a swap in the plan itself. No
 deadlock: in a step with nobody delayed, the earliest-planned move still pending can always be made, since everything
 it waits for was planned earlier and so has happened. If any of these ever failed it would be a bug, so the simulator
-raises instead of recording (tested by breaking a cell's queue by hand, because no valid plan can do it).
+raises instead of recording (the swap and deadlock guards tested by breaking a cell's queue by hand, since no valid
+plan can trigger them; the collision and illegal-move checks by forcing a bad step, in the review's tests).
 
 **Why decide everyone's move together instead of one robot at a time?**
 Rotations. Four robots on a 2 x 2 grid each moving to the next cell clockwise is valid, but each needs the robot ahead
 to leave first; one robot at a time, nobody ever goes. So the step starts from every robot that's next in its target
-cell's queue, drops those whose target is held by a robot that isn't moving, and repeats until nothing changes. What
-survives is chains of followers and closed cycles (`test_ordered_moves_a_rotation_in_one_step`).
+cell's queue and drops each one whose target is held by a robot that isn't a candidate; a dropped robot stays put, so
+the drop passes back to the one robot that wanted its cell, and on down the chain. What survives is chains of
+followers and closed cycles (`test_ordered_moves_a_rotation_in_one_step`). The first version re-scanned every robot
+until nothing changed: the same answer, but quadratic per step on a long blocked chain (2.2 s for 400 followers in a
+corridor, 0.34 s now; the warehouse delay experiment prints identical tables with either).
 
 **What does an undelayed ordered run of a CBS plan cost?**
 Exactly the plan, robot by robot. Two facts squeeze it: with no delays every move happens no later than planned (by
@@ -371,7 +375,8 @@ They're compared with two independent checks in the library. On 40 delayed timet
 simulator records are exactly the conflicts `validate()` and the conflict scanner find on the trajectories it drove,
 pair by pair. That comparison caught a bug on its first run: the swap check looked robots up by their move, one robot
 per move, but under the timetable two robots already stacked in one cell can make the same move, and the second
-robot's swap went unseen (47 found against validate's 48). A mutation check of the simulator kills all 11 mutants.
+robot's swap went unseen (47 found against validate's 48). My mutation check of the simulator kills 13 of 13 mutants;
+the review then found 8 of its own that my tests missed, and its tests kill them.
 
 **What does a delay actually do to a plan?**
 Run as a timetable, it breaks it, fast. On warehouse-10-20-10-2-1 with 20 robots, delaying each robot at each step
@@ -452,7 +457,10 @@ tests kill all eight. Its best clean check ran the ordered policy step by step a
 dependency graph, written differently (an explicit list of each visit's earlier visitors), under adversarial delay
 schedules such as "delay whoever could move": 260,064 runs, the same moves at every step. It also noted three script
 edges I then fixed: the sweep's give-up rule assumed ascending agent counts, a time limit of 0 meant none, and a
-ratio divided by zero when every agent starts on its goal.
+ratio divided by zero when every agent starts on its goal. A second round, on everything after, found two bugs in
+those scripts, one in my fix: I'd guarded one division by zero and left the next one, by the lower bound, which is 0
+on exactly the same instances; and the summary script counted a repeated try once as solved but twice as tried. It
+also caught docs describing the step's old algorithm and a "twice as often" that held at one delay rate only.
 
 **Tell me about a bug in your own test tooling.**
 Two. My first test of the bounded draw's bias used n = 2^63 + 1 and expected about half the draws above 2^63 - 1;

@@ -294,9 +294,11 @@ that use it.
   (waits dropped); each cell gets the queue of visits the plan makes to it, in the order it makes them. A robot moves
   into its next cell when its visit is at the head of that cell's queue and the cell is empty or its occupant (the
   visit before, the only robot who can be there) leaves in the same step. Moves are decided together: start with every
-  robot at the head of its next cell's queue, drop those whose cell is held by a robot not moving, and repeat until
-  nothing changes; what is left are chains of robots following each other and rotations around cycles, which the
-  model allows. Why it is safe:
+  robot at the head of its next cell's queue, drop each one whose cell is held by a robot that isn't a candidate, and
+  pass each drop back to the one robot that wanted the dropped robot's cell (a cell's queue has one head), and on down
+  the chain, which is linear in the robots (the first version re-scanned until nothing changed: the same set, but
+  quadratic on a long blocked chain); what is left are chains of robots following each other and rotations around
+  cycles, which the model allows. Why it is safe:
   - *No vertex conflict*: each cell is entered in the plan's order, one visit at a time, and only after the visit
     before has left.
   - *No swap*: if robots i (in u) and j (in v) could both move, j's visit to v comes just before i's and i's to u just

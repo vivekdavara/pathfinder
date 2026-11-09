@@ -235,13 +235,14 @@ collision and delay counts don't depend on load. Every number comes from the com
 
   What the records say about CBS (from the JSONL): it is **bimodal**. Of its 269 solved tries, 228 took under 10 ms
   and 11 between 1 and 5 s (median 29 nodes, 90th percentile 3,803); its 281 failures had generated a median of
-  354,684 nodes (40,824 to 673,275) when the limit stopped them, about 71,000 a second. So a longer limit would
-  likely add few solves (an inference from that distribution, not measured). Its solved plans are close to the lower
-  bound (on empty-32-32, at it on 81 of 94 and never more than 0.6% above): what it can't do on open maps is prove
-  optimality among many equally short ways to dodge, the symmetry cardinal-conflict and rectangle reasoning target.
+  354,684 nodes (40,824 to 673,275) when the limit stopped them, a median of 70,937 nodes a second per try (65,771
+  over all the failures' nodes and time together). So a longer limit would likely add few solves (an inference from
+  that distribution, not measured). Its solved plans are close to the lower bound (on empty-32-32, at it on 81 of 94
+  and never more than 0.6% above): what it can't do on open maps is prove optimality among many equally short ways to
+  dodge, the symmetry cardinal-conflict and rectangle reasoning target.
   On the generated floor (synthetic, 27 x 12, 204 free cells; `results/day4/sweep_generated.md`) the crowding comes
   sooner: CBS 25, 22, 13, 2, 0 of 25 at 5, 10, 15, 20, 25 agents; PP 25, 25, 23, 23, 18, then 3 at 40 and 0 at 50,
-  and 17.5% above CBS on average at 20 agents.
+  and 17.5% above CBS on average at 20 agents (over only the 2 instances both solve there).
 - **The simulator's checks agree with the library's.** On 40 delayed timetable runs (30 agents on the generated floor,
   5 scenarios x 8 seeds, delays at 10% a step), the collisions the simulator records are exactly the conflicts
   `validate()` and the conflict scanner find on the driven trajectories, pair by pair; all 40 runs collide (the test
@@ -271,7 +272,9 @@ collision and delay counts don't depend on load. Every number comes from the com
   (A collision is a pair of robots in one cell, or swapping, at one step, so a pair stuck together three steps counts
   three.) Executed in the plan's order instead, no run collides, and each robot-step of delay costs the fleet 1.01 to
   1.05 robot-steps: on this sparse map a delay mostly costs only the robot it happens to. **Why PP's plans collide
-  twice as often on the same instances**: they hand off cells much more tightly. Counting following moves (a robot
+  more often on the same instances** (2.3x the runs at p = 0.01, 1.2x to 1.5x at higher p; on random-32-32-20 1.35x
+  at p = 0.01, down to 1.0x at p = 0.2, where nearly every run of both collides): they hand off cells much more
+  tightly. Counting following moves (a robot
   moving into a cell in the step another moves out of it, the hand-off a one-step delay of the robot ahead turns into
   a collision): 561 over PP's 23 plans against 169 over CBS's (`.scratch/d4/handoffs.py`, not committed; `delays.py`
   now prints it per plan). Prioritized planning routes each robot by the earliest arrival around the ones before it,
@@ -289,7 +292,8 @@ collision and delay counts don't depend on load. Every number comes from the com
   | CBS | 3 | 3.0% | 3.100 | 0.100 | 0.050 |
   | CBS | 5 | 5.2% | 5.243 | 0.243 | 0.085 |
 
-  A five-step delay of one robot in a CBS plan holds up another robot in about one run in twelve.
+  A five-step delay of one robot in a CBS plan makes 0.085 other robots arrive later per run, so at most one run in
+  twelve holds anyone up (the column counts robots, not runs).
 
   **On a denser map**, random-32-32-20 (819 free cells against warehouse-10-20-10-2-1's 5,699), 20 agents, the 24 of
   25 scenarios both solve, 480 runs a row (same command with `--map random-32-32-20`): as a timetable, p = 0.01 makes
@@ -722,6 +726,20 @@ One agent in its own worktree at `ed1cf44` (the simulator, its tests, `sweep.py`
 - **Script caveats it noted**, fixed after: `sweep.py`'s give-up assumed ascending `--agents`, `--time-limit 0`
   meant no limit, and a CBS SOC of 0 would divide by zero; `delays.py` at `ed1cf44` compared the planners on
   different instance sets (already paired in `1ed3e42`).
+
+**Round 2** (the same agent at `c75fdf5`, on everything after `ed1cf44`, 11:52 to 12:01, ~237k tokens in all; tests in
+`tests/python/review_d4b/`): **two bugs, both in the scripts**, each a test that failed there. `sweep.py` guarded PP's
+SOC over CBS's against zero but still divided each SOC by the lower bound, which is 0 on the same instances (every
+agent on its goal): a `ZeroDivisionError` instead of a row. `sweep_summary.py`, given several files, kept solved tries
+in a dict by scenario and tried ones in a list, so a repeated try counted once as solved and twice as tried; a
+planner's second try on one instance is now refused (exit 1; the committed `summary.md` is unchanged, its files share
+no instance). Both fixed in `4729f63`, which also refuses `--time-limit inf` (no limit, like 0). Its doc check, from
+the committed records: every table row and WALKTHROUGH benchmark number reproduces; wrong were "twice as often" (true
+at p = 0.01 only: 1.2x to 1.5x at higher p), "one run in twelve" (the column counts robots, not runs), the step
+described as re-scanning (the old algorithm), an unqualified "kills all 11 mutants", and WALKTHROUGH's stale "tested by
+breaking a queue"; all corrected. Clean: the linear drop against its own executor on 166,173 small and 4,692 large
+runs, the `--single` rows and `following_moves` recomputed. Three mutants of the new drop code survive, all argued
+equivalent (the order drops are taken in, and two checks that can't differ there).
 
 ## Design decisions
 
