@@ -11,6 +11,8 @@ target_compile_definitions(pathfinder_python PRIVATE PATHFINDER_VERSION="${PROJE
 pathfinder_set_warnings(pathfinder_python)
 
 configure_file(pathfinder/__init__.py ${package_dir}/__init__.py COPYONLY)
+# The pure-Python parts of the package, next to it.
+configure_file(pathfinder/simulator.py ${package_dir}/simulator.py COPYONLY)
 
 if(PATHFINDER_BUILD_TESTS)
   # The pytest suite (tests/python) against the module just built, with the interpreter it was built for.
