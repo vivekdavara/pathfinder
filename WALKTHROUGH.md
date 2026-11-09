@@ -460,7 +460,10 @@ edges I then fixed: the sweep's give-up rule assumed ascending agent counts, a t
 ratio divided by zero when every agent starts on its goal. A second round, on everything after, found two bugs in
 those scripts, one in my fix: I'd guarded one division by zero and left the next one, by the lower bound, which is 0
 on exactly the same instances; and the summary script counted a repeated try once as solved but twice as tried. It
-also caught docs describing the step's old algorithm and a "twice as often" that held at one delay rate only.
+also caught docs describing the step's old algorithm and a "twice as often" that held at one delay rate only. A
+third round found the same pattern once more: my time-limit check went into `sweep.py` but not into `delays.py`,
+which passes the same flag to the same planner, and my deduplication covered agent counts but not map names. A fix
+is a claim about every place the problem lives, so I now grep for the siblings before committing one.
 
 **Tell me about a bug in your own test tooling.**
 Two. My first test of the bounded draw's bias used n = 2^63 + 1 and expected about half the draws above 2^63 - 1;
