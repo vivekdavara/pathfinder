@@ -283,6 +283,54 @@ returned had changed. When two agents meet in a corridor, both children usually 
 reappears a step later, so the tree fills with ties. The known fix is to split on cardinal conflicts first (ones where both children must cost more,
 found from each agent's graph of optimal paths); it's on the list as a measured refinement, not an assumption.
 
+## The simulator (day 4)
+
+**What is the simulator for?**
+A plan is a timetable: robot i is in cell c at time t. Real robots slip, and a plan has no slack (an optimal plan is
+as tight as its cost), so the question a warehouse asks is what a delay does to it. `python/pathfinder/simulator.py`
+executes a valid plan one step at a time, lets any robot be delayed at any step (it holds its cell for the step),
+checks every step on its own, and reports the costs the robots actually drove and every collision.
+
+**What are the two ways it executes a plan?**
+*Timetable*: every robot keeps to its own path, and a delayed robot falls one step behind; nobody else adapts. That's
+the naive execution, and a delay turns straight into collisions (a follower rear-ends its delayed leader the next
+step). *Ordered*: the plan's action dependency graph (Hönig et al., RA-L 2019). Each robot keeps its path's cells but
+not its clock: the plan's waits are dropped, and a robot enters a cell only when it's the next robot the plan sends
+through that cell and the one before it has left. So the plan's order of visits to every cell is kept, not its times.
+
+**Why can't the ordered policy collide or deadlock?**
+No two robots share a cell, because each cell is entered in the plan's order, one visit at a time, after the visit
+before has left. No head-on swap: if i (in u) and j (in v) could both move, j's visit to v comes just before i's and
+i's to u just before j's, which in the plan forces them to leave at the same step, a swap in the plan itself. No
+deadlock: in a step with nobody delayed, the earliest-planned move still pending can always be made, since everything
+it waits for was planned earlier and so has happened. If any of these ever failed it would be a bug, so the simulator
+raises instead of recording (tested by breaking a cell's queue by hand, because no valid plan can do it).
+
+**Why decide everyone's move together instead of one robot at a time?**
+Rotations. Four robots on a 2 x 2 grid each moving to the next cell clockwise is valid, but each needs the robot ahead
+to leave first; one robot at a time, nobody ever goes. So the step starts from every robot that's next in its target
+cell's queue, drops those whose target is held by a robot that isn't moving, and repeats until nothing changes. What
+survives is chains of followers and closed cycles (`test_ordered_moves_a_rotation_in_one_step`).
+
+**What does an undelayed ordered run of a CBS plan cost?**
+Exactly the plan, robot by robot. Two facts squeeze it: with no delays every move happens no later than planned (by
+induction on planned time), so no robot's cost goes up; and the trajectories driven are themselves a valid plan, which
+can't cost less than CBS's optimum. The test checks it on every CBS plan it makes. For prioritized planning the
+guarantee is only "no later", and I expected dropped waits to make some robots early; none ever was, because each
+path is the earliest arrival around the robots before it, so its waits are needed in that order. The test now says so.
+
+**How do you know the simulator's own checks are right?**
+They're compared with two independent checks in the library. On 40 delayed timetable runs, the collisions the
+simulator records are exactly the conflicts `validate()` and the conflict scanner find on the trajectories it drove,
+pair by pair. That comparison caught a bug on its first run: the swap check looked robots up by their move, one robot
+per move, but under the timetable two robots already stacked in one cell can make the same move, and the second
+robot's swap went unseen (47 found against validate's 48). A mutation check of the simulator kills all 11 mutants.
+
+**Why is the simulator in Python, not C++?**
+It isn't a hot path (a few thousand robot-steps per run), it sits next to the experiments that use it, and the checks
+that matter (validate, the scanner) are the library's, called through the bindings. Keeping it small and readable
+matters more than speed here.
+
 ## The review
 
 **How was day 1 reviewed?**
