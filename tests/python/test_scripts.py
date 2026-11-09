@@ -35,3 +35,24 @@ def test_scenario_numbers(module):
     assert list(numbers("1-5")) == [1, 2, 3, 4, 5]
     assert list(numbers("7")) == [7]
     assert list(numbers("3-2")) == []
+
+
+def test_sweep_summary():
+    summary = load("sweep_summary")
+
+    def rec(planner, scenario, status, soc=None, seconds=0.001, nodes=0, agents=10):
+        return {"map": "m", "agents": agents, "scenario": scenario, "planner": planner, "status": status,
+                "seconds": seconds, "sum_of_costs": soc, "lower_bound": 90, "expansions": 0, "nodes_generated": nodes}
+
+    records = [
+        rec("pp", 1, "SOLVED", 110), rec("cbs", 1, "SOLVED", 100, 0.002, 5),
+        rec("pp", 2, "NO_PATH"), rec("cbs", 2, "SOLVED", 100, 0.004, 7),
+        rec("pp", 3, "SOLVED", 105), rec("cbs", 3, "LIMIT", None, 5.0, 300_000),
+        rec("pp", 1, "SOLVED", 200, agents=20), rec("cbs", 1, "LIMIT", None, 5.0, 1, agents=20),
+        rec("pp", 1, "SOLVED", 300, agents=30),
+    ]
+    lines = summary.summarize(records)
+    assert lines[2] == "| m | 10 | 2 / 3 | 2 / 3 | 3.00 ms | 6 | +10.0%, +10.0% (1) |"
+    assert lines[3] == "| m | 20 | 1 / 1 | 0 / 1 | - | - | - |"
+    assert lines[4] == "| m | 30 | 1 / 1 | - | - | - | - |"
+    assert summary.duration(1.5) == "1.50 s"
