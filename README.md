@@ -238,6 +238,20 @@ collision and delay counts don't depend on load. Every number comes from the com
 
   A five-step delay of one robot in a CBS plan holds up another robot in about one run in twelve.
 
+  **On a denser map**, random-32-32-20 (819 free cells against warehouse-10-20-10-2-1's 5,699), 20 agents, the 24 of
+  25 scenarios both solve, 480 runs a row (same command with `--map random-32-32-20`): as a timetable, p = 0.01 makes
+  57.3% of PP's runs and 42.3% of CBS's collide, p = 0.05 91.9% and 82.7%; ordered, each robot-step of delay costs
+  1.112 to 1.205 robot-steps for PP and 1.094 to 1.142 for CBS, and one robot delayed 5 steps costs the others 2.74
+  (PP) and 2.37 (CBS) steps on average, holding up 0.79 and 0.71 of them. Following moves per plan: PP 18.8, CBS 14.8.
+- **The linear drop gives the same runs.** The ordered step first decided who moves by re-scanning every robot until
+  nothing changed (quadratic when a long chain of followers is blocked at its front); it now passes each drop back down
+  the chain (`b1a1fcd`). n robots following each other down a corridor, the leader delayed every other step: 8.3 / 43.9
+  / 287 / 2,203 ms before and 6.5 / 20.6 / 79.0 / 336 ms after at n = 50 / 100 / 200 / 400 (`.scratch/d4/
+  chain_bench.py`, not committed; release module, best of 3). The warehouse delay experiment above, all 6,440 runs x
+  2 policies, prints exactly the same tables with either version (`diff` of the two outputs). On ordinary plans the
+  simulator runs 0.7 to 0.8 million robot-steps a second ordered and about 1.1 million as a timetable (PP's plans of
+  100 agents on empty-32-32 and 200 on warehouse-10-20-10-2-1, scenario 1, with and without 5% delays).
+
 ## Results (day 3)
 
 Measured on an Apple M3, macOS 26.6.2, Apple Clang 21, on battery, with a review agent building in its own worktree

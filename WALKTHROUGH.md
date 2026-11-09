@@ -326,6 +326,23 @@ pair by pair. That comparison caught a bug on its first run: the swap check look
 per move, but under the timetable two robots already stacked in one cell can make the same move, and the second
 robot's swap went unseen (47 found against validate's 48). A mutation check of the simulator kills all 11 mutants.
 
+**What does a delay actually do to a plan?**
+Run as a timetable, it breaks it, fast. On warehouse-10-20-10-2-1 with 20 robots, delaying each robot at each step
+with probability 1% (about 16 robot-steps of delay in a run) makes 53.5% of prioritized planning's runs collide and
+23.5% of CBS's; on the denser random-32-32-20, 57.3% and 42.3% (`scripts/delays.py`, 460 and 480 runs a row).
+Executed in the plan's order instead, nothing collides and the cost is mostly just the delay itself: each robot-step
+of delay costs the fleet 1.01 to 1.05 robot-steps on the warehouse map and 1.09 to 1.21 on the denser one, where a
+delayed robot is more often in someone's way (a five-step delay of one robot there costs the others 2.4 to 2.7
+steps). That's the argument for executing a plan's order rather than its clock.
+
+**Why do prioritized planning's plans collide more often under the same delays?**
+Because they hand off cells more tightly. On the same 23 warehouse instances, its plans have 24.4 following moves
+each (a robot moving into a cell in the step another moves out of it) against CBS's 7.3; on random-32-32-20, 18.8
+against 14.8. A one-step delay of the robot ahead turns exactly those into collisions. Prioritized planning routes
+each robot by the earliest arrival around the robots before it, which hugs their paths; CBS starts from each robot's
+own shortest path and changes it only where a conflict forces it, so its robots meet less. I didn't expect it; the
+count was a hypothesis checked after the collision rates came out.
+
 **Why is the simulator in Python, not C++?**
 It isn't a hot path (a few thousand robot-steps per run), it sits next to the experiments that use it, and the checks
 that matter (validate, the scanner) are the library's, called through the bindings. Keeping it small and readable
