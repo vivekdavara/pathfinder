@@ -56,3 +56,15 @@ def test_sweep_summary():
     assert lines[3] == "| m | 20 | 1 / 1 | 0 / 1 | - | - | - |"
     assert lines[4] == "| m | 30 | 1 / 1 | - | - | - | - |"
     assert summary.duration(1.5) == "1.50 s"
+
+
+def test_sweep_refuses_no_time_limit_and_sorts_the_agent_counts(capsys):
+    sweep = load("sweep")
+    with pytest.raises(SystemExit) as stop:
+        sweep.main(["--maps", "generated-warehouse", "--agents", "4", "--scenarios", "1", "--time-limit", "0"])
+    assert stop.value.code == 2 and "more than 0" in capsys.readouterr().err
+    # Given 8 before 4, the rows still come 4 then 8 (the give-up rule relies on it).
+    assert sweep.main(["--maps", "generated-warehouse", "--agents", "8", "4", "--scenarios", "1", "--time-limit", "2"]) == 0
+    rows = [line.split("|")[1].strip() for line in capsys.readouterr().out.splitlines() if line[:3] in ("| 4", "| 8")]
+    assert rows == ["4", "8"]
+    assert sweep.soc_ratio(0, 0) == 1.0 and sweep.soc_ratio(11, 10) == 1.1

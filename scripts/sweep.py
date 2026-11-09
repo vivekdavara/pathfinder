@@ -16,7 +16,8 @@ exits 1 if any plan fails either check, or if CBS's SOC is ever above prioritize
 Prints a Markdown table per map: for each agent count, solved / tried for each planner, the median and largest wall
 time (C++'s own clock, over every try, solved or not), and on the instances both solve, prioritized planning's SOC
 over CBS's (the mean and the largest) and each one's SOC over the lower bound. Once a planner solves none at some
-agent count, larger counts aren't tried for it (--keep-going tries them anyway). --jsonl writes one record per try.
+agent count, larger counts aren't tried for it (--keep-going tries them anyway); the counts are taken in ascending
+order whatever order they're given in. --jsonl writes one record per try.
 """
 
 from __future__ import annotations
@@ -55,6 +56,12 @@ def run(planner: str, instance: pf.Instance, time_limit: float) -> pf.PlanResult
     return pf.cbs(instance, time_limit=time_limit)
 
 
+def soc_ratio(pp: int, cbs: int) -> float:
+    """Prioritized planning's SOC over CBS's; 1 when both are 0 (every agent starts on its goal, so both plans are
+    free)."""
+    return pp / cbs if cbs else 1.0
+
+
 def ms(seconds: float) -> str:
     if seconds < 0.01:
         return f"{seconds * 1000:.2f} ms"
@@ -79,6 +86,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--keep-going", action="store_true", help="try every agent count even after a planner solves none")
     p.add_argument("--jsonl", type=Path, help="write one JSON record per try here")
     args = p.parse_args(argv)
+    if not args.time_limit > 0:
+        # 0 means "no limit" to the planners, and CBS on an unsolvable instance whose goals are reachable never stops.
+        p.error("--time-limit must be more than 0 seconds")
+    # Ascending, so "solved none at k" can stop a planner at every larger k (the day-4 review: the give-up assumed it).
+    args.agents = sorted(set(args.agents))
 
     numbers = scenario_numbers(args.scenarios)
     out = args.jsonl.open("w") if args.jsonl else None
@@ -140,7 +152,7 @@ def main(argv: list[str] | None = None) -> int:
                     failures += 1
             cells.append(str(len(both)))
             if both:
-                ratios = [pp[n]["sum_of_costs"] / cbs[n]["sum_of_costs"] for n in both]
+                ratios = [soc_ratio(pp[n]["sum_of_costs"], cbs[n]["sum_of_costs"]) for n in both]
                 cells.append(f"{statistics.mean(ratios):.4f}, {max(ratios):.4f}")
                 for got in (pp, cbs):
                     cells.append(f"{statistics.mean(got[n]['sum_of_costs'] / got[n]['lower_bound'] for n in both):.4f}")

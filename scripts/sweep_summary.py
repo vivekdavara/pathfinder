@@ -42,7 +42,8 @@ def summarize(records: list[dict]) -> list[str]:
             cells += ["-", "-"]
         both = sorted(solved["pp"].keys() & solved["cbs"].keys())
         if both:
-            ratios = [solved["pp"][n]["sum_of_costs"] / solved["cbs"][n]["sum_of_costs"] for n in both]
+            socs = [(solved["pp"][n]["sum_of_costs"], solved["cbs"][n]["sum_of_costs"]) for n in both]
+            ratios = [pp / cbs if cbs else 1.0 for pp, cbs in socs]  # both 0: every agent starts on its goal
             cells.append(f"+{(statistics.mean(ratios) - 1) * 100:.1f}%, +{(max(ratios) - 1) * 100:.1f}% ({len(both)})")
         else:
             cells.append("-")
