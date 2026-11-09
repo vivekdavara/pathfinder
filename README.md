@@ -191,11 +191,11 @@ collision and delay counts don't depend on load. Every number comes from the com
   (`python.sweep`, `python.delays`). A mutation check of the simulator (`.scratch/mutate_d4.py`, not committed) kills
   13 of 13 mutants: the drop propagation (three), the queue order, the queue head, following, both guards, the
   timetable's delays, the swap pairing, the vertex time, the delay count, the costs. The review ran 35 mutants of its
-  own: 8 survived my tests, and with its tests 34 of 35 die (README "Review of day 4"). Coverage of `simulator.py` under the pytest suite: 212 of 213 lines and 93
-  of 94 branches (the missed line is now read by a test; the branch left is a defensive check that a robot isn't
-  dropped twice, which the drop rule can't do); the day-4 scripts 81% to 89% (coverage.py 7.17.2 in a scratch venv,
-  not a project dependency: `coverage run --branch --include='*/pathfinder/simulator.py,*/scripts/*.py' -m pytest
-  tests/python`).
+  own: 8 survived my tests, and with its tests 34 of 35 die (README "Review of day 4"). Coverage of `simulator.py`
+  under the pytest suite: 212 of 213 lines and 93 of 94 branches (the missed line is now read by a test; the branch
+  left is a defensive check that a robot isn't dropped twice, which the drop rule can't do); the day-4 scripts 81% to
+  89% (coverage.py 7.17.2 in a scratch venv, not a project dependency: `coverage run --branch
+  --include='*/pathfinder/simulator.py,*/scripts/*.py' -m pytest tests/python`).
 - **Prioritized planning against CBS** (`scripts/sweep.py`, command under "How to run": the first k agents of each of
   the 25 random scenarios, 5 s per try, 1,550 tries from 11:23 to 11:48; raw records and outputs in
   [`results/day4/`](results/day4/), this table from `scripts/sweep_summary.py`). Every plan passed `validate()` and
@@ -297,13 +297,16 @@ collision and delay counts don't depend on load. Every number comes from the com
   1.112 to 1.205 robot-steps for PP and 1.094 to 1.142 for CBS, and one robot delayed 5 steps costs the others 2.74
   (PP) and 2.37 (CBS) steps on average, holding up 0.79 and 0.71 of them. Following moves per plan: PP 18.8, CBS 14.8.
 - **The linear drop gives the same runs.** The ordered step first decided who moves by re-scanning every robot until
-  nothing changed (quadratic when a long chain of followers is blocked at its front); it now passes each drop back down
-  the chain (`b1a1fcd`). n robots following each other down a corridor, the leader delayed every other step: 8.3 / 43.9
-  / 287 / 2,203 ms before and 6.5 / 20.6 / 79.0 / 336 ms after at n = 50 / 100 / 200 / 400 (`.scratch/d4/
-  chain_bench.py`, not committed; release module, best of 3). The warehouse delay experiment above, all 6,440 runs x
-  2 policies, prints exactly the same tables with either version (`diff` of the two outputs). On ordinary plans the
-  simulator runs 0.7 to 0.8 million robot-steps a second ordered and about 1.1 million as a timetable (PP's plans of
-  100 agents on empty-32-32 and 200 on warehouse-10-20-10-2-1, scenario 1, with and without 5% delays).
+  nothing changed (quadratic when a long chain of followers is blocked at its front); it now passes each drop back
+  down the chain (`b1a1fcd`). n robots following each other down a corridor, the leader delayed every other step: 8.3
+  / 43.9 / 287 / 2,203 ms before and 6.5 / 20.6 / 79.0 / 336 ms after at n = 50 / 100 / 200 / 400 (`.scratch/d4/
+  chain_bench.py`, not committed; release module, best of 3). The warehouse delay experiment above, all 6,440 runs x 2
+  policies, prints exactly the same tables with either version (`diff` of the two outputs). On ordinary plans, at
+  b1a1fcd's code, the simulator runs 1.13 to 1.22 million robot-steps a second ordered and 1.68 to 1.87 million as a
+  timetable, including building the simulator and validating the plan (PP's plans of 100 agents on empty-32-32 and 200
+  on warehouse-10-20-10-2-1, scenario 1, with and without 5% delays; best of 3, load about 3:
+  `.scratch/d4/throughput.py`, not committed). A first, single-run measurement at load 7, before the linear drop, gave
+  0.7-0.8 and 1.1 million.
 
 ## Results (day 3)
 
