@@ -185,12 +185,17 @@ on one core, but alongside a review agent working in its own worktree and the de
 times near a limit carry that load; solved counts at a 5 s limit can move by an instance or two with it. SOC,
 collision and delay counts don't depend on load. Every number comes from the command next to it.
 
-- **Tests**: 202 CTest tests (`ctest --preset dev -N`; 200 on day 3), of which `python.pytest` holds 72 pytest tests
-  (51 on day 3): new are `tests/python/test_simulator.py` (18) and `tests/python/test_scripts.py` (3), and CTest runs
-  both experiment scripts briefly on the generated floor (`python.sweep`, `python.delays`). A mutation check of the
-  simulator (`.scratch/mutate_d4.py`, not committed) kills 11 of 11 mutants: the move fixed point, the queue order,
-  the queue head, following, both guards, the timetable's delays, the swap pairing, the vertex time, the delay count,
-  the costs.
+- **Tests**: 202 CTest tests (`ctest --preset dev -N`; 200 on day 3), of which `python.pytest` holds 89 pytest tests
+  (51 on day 3): new are `tests/python/test_simulator.py` (19), `tests/python/test_scripts.py` (5) and the review's
+  `tests/python/review_d4/` (14), and CTest runs both experiment scripts briefly on the generated floor
+  (`python.sweep`, `python.delays`). A mutation check of the simulator (`.scratch/mutate_d4.py`, not committed) kills
+  13 of 13 mutants: the drop propagation (three), the queue order, the queue head, following, both guards, the
+  timetable's delays, the swap pairing, the vertex time, the delay count, the costs. The review ran 35 mutants of its
+  own: 8 survived my tests, and with its tests 34 of 35 die (README "Review of day 4"). Coverage of `simulator.py` under the pytest suite: 212 of 213 lines and 93
+  of 94 branches (the missed line is now read by a test; the branch left is a defensive check that a robot isn't
+  dropped twice, which the drop rule can't do); the day-4 scripts 81% to 89% (coverage.py 7.17.2 in a scratch venv,
+  not a project dependency: `coverage run --branch --include='*/pathfinder/simulator.py,*/scripts/*.py' -m pytest
+  tests/python`).
 - **Prioritized planning against CBS** (`scripts/sweep.py`, command under "How to run": the first k agents of each of
   the 25 random scenarios, 5 s per try, 1,550 tries from 11:23 to 11:48; raw records and outputs in
   [`results/day4/`](results/day4/), this table from `scripts/sweep_summary.py`). Every plan passed `validate()` and

@@ -52,6 +52,7 @@ def test_a_delayed_leader_is_rear_ended():
     assert [c.time for c in run.collisions] == [1, 2, 3]
     assert all(c.kind == "vertex" for c in run.collisions)
     assert run.costs == [3, 4] and run.extra_cost == 1 and run.delay_steps == 1
+    assert sim.collisions == run.collisions  # the simulator's own list, a copy
 
 
 def test_a_delay_can_make_two_robots_swap():
