@@ -78,9 +78,10 @@ flowchart LR
 | `tools/pathfinder_cli.cpp` | the `pathfinder` command |
 | `python/` | the pybind11 module `pathfinder._core` and the `pathfinder` package, with `pathfinder/simulator.py` (day 4) |
 | `tests/` | GoogleTest suites, `cli_test.sh`, `python/` (pytest), `data/` (small hand-written files), `review/` (the review's tests) |
-| `scripts/` | `fetch_maps.py` (the benchmark set), `check_maps.sh`, `gcc_check.sh`, `pp_sweep.py` (prioritized planning on the benchmark maps, day 2), `sweep.py` (both planners across agent counts), `delays.py` (plans executed under delays) |
+| `scripts/` | `fetch_maps.py` (the benchmark set), `check_maps.sh`, `gcc_check.sh`, `pp_sweep.py` (prioritized planning on the benchmark maps, day 2), `sweep.py` (both planners across agent counts), `sweep_summary.py` (its records as one table), `delays.py` (plans executed under delays) |
 | `examples/` | `independent_paths.py`: each agent's shortest path alone, and the conflicts the validator finds; `prioritized_vs_independent.py`: the same floor planned both ways, and where prioritized planning stops |
 | `bench/` | the Google Benchmark suite (`make bench`) |
+| `results/day4/` | the day-4 sweeps' records (JSONL) and the experiments' printed tables, with the commands ([README](results/day4/README.md)) |
 
 ## How to run
 
@@ -190,6 +191,52 @@ collision and delay counts don't depend on load. Every number comes from the com
   simulator (`.scratch/mutate_d4.py`, not committed) kills 11 of 11 mutants: the move fixed point, the queue order,
   the queue head, following, both guards, the timetable's delays, the swap pairing, the vertex time, the delay count,
   the costs.
+- **Prioritized planning against CBS** (`scripts/sweep.py`, command under "How to run": the first k agents of each of
+  the 25 random scenarios, 5 s per try, 1,550 tries from 11:23 to 11:48; raw records and outputs in
+  [`results/day4/`](results/day4/), this table from `scripts/sweep_summary.py`). Every plan passed `validate()` and
+  the lower bound, and CBS was never above prioritized planning. CBS stops being tried once it solves none:
+
+  | map | agents | PP solved | CBS solved | CBS median time, solved | PP SOC over CBS's, both solved: mean, max (n) |
+  |---|---:|---:|---:|---:|---:|
+  | empty-32-32 | 10 | 25 / 25 | 25 / 25 | 0.12 ms | +0.5%, +6.1% (25) |
+  | empty-32-32 | 20 | 25 / 25 | 23 / 25 | 0.34 ms | +2.8%, +12.3% (23) |
+  | empty-32-32 | 30 | 25 / 25 | 17 / 25 | 0.75 ms | +6.4%, +16.3% (17) |
+  | empty-32-32 | 40 | 25 / 25 | 14 / 25 | 1.20 ms | +7.4%, +16.1% (14) |
+  | empty-32-32 | 50 | 25 / 25 | 9 / 25 | 2.05 ms | +9.3%, +17.6% (9) |
+  | empty-32-32 | 60 | 25 / 25 | 5 / 25 | 5.22 ms | +10.6%, +16.9% (5) |
+  | empty-32-32 | 70 | 25 / 25 | 1 / 25 | 3.93 s | +11.6% (1) |
+  | empty-32-32 | 80 | 25 / 25 | 0 / 25 | - | - |
+  | random-32-32-20 | 10 | 25 / 25 | 25 / 25 | 0.18 ms | +1.7%, +12.3% (25) |
+  | random-32-32-20 | 20 | 25 / 25 | 25 / 25 | 3.79 ms | +4.9%, +18.2% (25) |
+  | random-32-32-20 | 30 | 25 / 25 | 9 / 25 | 782 ms | +6.2%, +12.8% (9) |
+  | random-32-32-20 | 40 | 25 / 25 | 1 / 25 | 2.73 ms | +6.0% (1) |
+  | random-32-32-20 | 50 | 24 / 25 | 0 / 25 | - | - |
+  | room-32-32-4 | 10 | 25 / 25 | 24 / 25 | 0.50 ms | +2.6%, +18.3% (24) |
+  | room-32-32-4 | 20 | 23 / 25 | 12 / 25 | 13.7 ms | +3.9%, +9.6% (11) |
+  | room-32-32-4 | 30 | 19 / 25 | 0 / 25 | - | - |
+  | warehouse-10-20-10-2-1 | 10 | 25 / 25 | 25 / 25 | 0.43 ms | +2.6%, +22.6% (25) |
+  | warehouse-10-20-10-2-1 | 20 | 25 / 25 | 23 / 25 | 1.42 ms | +3.2%, +12.2% (23) |
+  | warehouse-10-20-10-2-1 | 30 | 25 / 25 | 17 / 25 | 3.33 ms | +3.5%, +11.1% (17) |
+  | warehouse-10-20-10-2-1 | 40 | 25 / 25 | 10 / 25 | 7.07 ms | +3.7%, +9.3% (10) |
+  | warehouse-10-20-10-2-1 | 50 | 25 / 25 | 4 / 25 | 8.43 ms | +4.7%, +7.6% (4) |
+  | warehouse-10-20-10-2-1 | 60 | 25 / 25 | 0 / 25 | - | - |
+
+  Prioritized planning alone at larger counts (solved of 25; the same sweep at 60-100, and
+  `results/day4/sweep_pp_large.md` beyond): empty-32-32 25 at 100 and 150, 22 at 200, 7 at 300, 0 at 400;
+  random-32-32-20 21 at 100, 8 at 150, 0 at 200; room-32-32-4 6 at 60, 1 at 100, 0 at 150; warehouse-10-20-10-2-1
+  24 at 100, 14 at 200, 1 at 400. Its median time stays under 20 ms through 100 agents on every map (250 ms at 400 on
+  the warehouse map). Its failures are all `NO_PATH` (161 of 1,000 tries in the main sweep): an agent walled in by
+  those planned before it.
+
+  What the records say about CBS (from the JSONL): it is **bimodal**. Of its 269 solved tries, 228 took under 10 ms
+  and 11 between 1 and 5 s (median 29 nodes, 90th percentile 3,803); its 281 failures had generated a median of
+  354,684 nodes (40,824 to 673,275) when the limit stopped them, about 71,000 a second. So a longer limit would
+  likely add few solves (an inference from that distribution, not measured). Its solved plans are close to the lower
+  bound (on empty-32-32, at it on 81 of 94 and never more than 0.6% above): what it can't do on open maps is prove
+  optimality among many equally short ways to dodge, the symmetry cardinal-conflict and rectangle reasoning target.
+  On the generated floor (synthetic, 27 x 12, 204 free cells; `results/day4/sweep_generated.md`) the crowding comes
+  sooner: CBS 25, 22, 13, 2, 0 of 25 at 5, 10, 15, 20, 25 agents; PP 25, 25, 23, 23, 18, then 3 at 40 and 0 at 50,
+  and 17.5% above CBS on average at 20 agents.
 - **The simulator's checks agree with the library's.** On 40 delayed timetable runs (30 agents on the generated floor,
   5 scenarios x 8 seeds, delays at 10% a step), the collisions the simulator records are exactly the conflicts
   `validate()` and the conflict scanner find on the driven trajectories, pair by pair; all 40 runs collide (the test
