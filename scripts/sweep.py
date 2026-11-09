@@ -56,10 +56,10 @@ def run(planner: str, instance: pf.Instance, time_limit: float) -> pf.PlanResult
     return pf.cbs(instance, time_limit=time_limit)
 
 
-def soc_ratio(pp: int, cbs: int) -> float:
-    """Prioritized planning's SOC over CBS's; 1 when both are 0 (every agent starts on its goal, so both plans are
-    free)."""
-    return pp / cbs if cbs else 1.0
+def soc_ratio(soc: int, other: int) -> float:
+    """One SOC over another (CBS's, or the lower bound); 1 when both are 0 (every agent starts on its goal, so every
+    plan is free). The other is 0 only then: CBS is optimal and the bound is a bound."""
+    return soc / other if other else 1.0
 
 
 def ms(seconds: float) -> str:
@@ -86,9 +86,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--keep-going", action="store_true", help="try every agent count even after a planner solves none")
     p.add_argument("--jsonl", type=Path, help="write one JSON record per try here")
     args = p.parse_args(argv)
-    if not args.time_limit > 0:
-        # 0 means "no limit" to the planners, and CBS on an unsolvable instance whose goals are reachable never stops.
-        p.error("--time-limit must be more than 0 seconds")
+    if not 0 < args.time_limit < 1e9:
+        # 0, and a billion seconds or more (inf included), mean "no limit" to the planners, and CBS on an unsolvable
+        # instance whose goals are reachable never stops (the review's second round: inf got past a "> 0" check).
+        p.error("--time-limit must be more than 0 and less than a billion seconds")
     # Ascending, so "solved none at k" can stop a planner at every larger k (the day-4 review: the give-up assumed it).
     args.agents = sorted(set(args.agents))
 
@@ -155,7 +156,10 @@ def main(argv: list[str] | None = None) -> int:
                 ratios = [soc_ratio(pp[n]["sum_of_costs"], cbs[n]["sum_of_costs"]) for n in both]
                 cells.append(f"{statistics.mean(ratios):.4f}, {max(ratios):.4f}")
                 for got in (pp, cbs):
-                    cells.append(f"{statistics.mean(got[n]['sum_of_costs'] / got[n]['lower_bound'] for n in both):.4f}")
+                    # A lower bound of 0 means every agent starts on its goal: SOC 0 too, which is the bound (the
+                    # day-4 review's second round: this divided by it).
+                    over = [soc_ratio(got[n]["sum_of_costs"], got[n]["lower_bound"]) for n in both]
+                    cells.append(f"{statistics.mean(over):.4f}")
             else:
                 cells += ["-", "-", "-"]
             print(f"| {k} | " + " | ".join(cells) + " |", flush=True)

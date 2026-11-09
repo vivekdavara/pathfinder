@@ -4,8 +4,9 @@ solve (DESIGN.md "Measurements (day 4)").
 
     .venv/bin/python scripts/sweep_summary.py results/day4/sweep.jsonl [more.jsonl ...]
 
-Rows come in the order the records do. A planner sweep.py stopped trying (it solved none at a smaller count) shows
-"-". Needs no build: it reads only the JSON records.
+Rows come in the order the records do. A planner's second try on the same instance (map, agents, scenario) is an
+error: which one to count would be ambiguous. A planner sweep.py stopped trying (it solved none at a smaller count)
+shows "-". Needs no build: it reads only the JSON records.
 """
 
 from __future__ import annotations
@@ -23,7 +24,15 @@ def duration(seconds: float) -> str:
 
 def summarize(records: list[dict]) -> list[str]:
     tries: dict[tuple[str, int], dict[str, list[dict]]] = defaultdict(lambda: defaultdict(list))
+    seen = set()
     for r in records:
+        key = (r["map"], r["agents"], r["planner"], r["scenario"])
+        if key in seen:
+            # Two tries of one planner on one instance (a re-run, or files that overlap): which to count, and which
+            # to pair with the other planner's, is ambiguous, so refuse (the day-4 review's second round: the solved
+            # count kept one while the tried count kept both).
+            raise ValueError(f"a repeated try: map {key[0]}, {key[1]} agents, {key[2]}, scenario {key[3]}")
+        seen.add(key)
         tries[(r["map"], r["agents"])][r["planner"]].append(r)
     lines = [
         "| map | agents | PP solved | CBS solved | CBS median time, solved | CBS median nodes, solved "
@@ -56,7 +65,11 @@ def main(argv: list[str]) -> int:
         print(__doc__.split("\n\n")[1].strip(), file=sys.stderr)
         return 2
     records = [json.loads(line) for path in argv for line in Path(path).read_text().splitlines() if line]
-    print("\n".join(summarize(records)))
+    try:
+        print("\n".join(summarize(records)))
+    except ValueError as e:
+        print(f"sweep_summary.py: {e}", file=sys.stderr)
+        return 1
     return 0
 
 

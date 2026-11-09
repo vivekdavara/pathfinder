@@ -63,6 +63,10 @@ def test_sweep_refuses_no_time_limit_and_sorts_the_agent_counts(capsys):
     with pytest.raises(SystemExit) as stop:
         sweep.main(["--maps", "generated-warehouse", "--agents", "4", "--scenarios", "1", "--time-limit", "0"])
     assert stop.value.code == 2 and "more than 0" in capsys.readouterr().err
+    for limit in ("inf", "1e9", "nan"):  # also "no limit" to the planners (inf: the review's second round)
+        with pytest.raises(SystemExit):
+            sweep.main(["--maps", "generated-warehouse", "--agents", "4", "--scenarios", "1", "--time-limit", limit])
+    capsys.readouterr()
     # Given 8 before 4, the rows still come 4 then 8 (the give-up rule relies on it).
     args = ["--maps", "generated-warehouse", "--agents", "8", "4", "--scenarios", "1", "--time-limit", "2"]
     assert sweep.main(args) == 0
