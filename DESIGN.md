@@ -273,11 +273,61 @@ each agent's shortest path alone, and the conflicts that leaves. The experiments
 simulator executes a plan one time step at a time, checking each step (so it can also replay a plan with a robot
 delayed, to show what a plan's lack of slack costs).
 
+**As built (day 4, `python/pathfinder/simulator.py`).** The simulator is pure Python on the bindings: a plan's
+execution is a loop over robots and steps, not a hot path, and keeping it out of C++ keeps it next to the experiments
+that use it.
+- *Input*: an instance and a **valid** plan (`validate()` is run first; anything else is a `ValueError`). The simulator
+  is for running good plans badly, not for judging plans.
+- *A step*: every robot moves from t to t + 1 at once, except the delayed ones, which hold their cells for the step.
+  A delay schedule is any function from (t, simulator) to the robots delayed in that step; `delay_robot(i, at,
+  steps)` and `random_delays(p, seed)` (each robot at each step with probability p, a draw for every robot whether
+  finished or not, so two runs with one seed get the same delays at the same steps) are the two used.
+- *Its own checks*: after every step, from the positions alone (not from how the policy chose them): each move is a
+  wait or to a passable 4-neighbour (else it raises: only a simulator bug can do that), every pair of robots in one
+  cell, every head-on swap, with `validate()`'s conventions. On delayed timetable runs the collisions it records are
+  exactly the conflicts `validate()` and the conflict scanner find on the trajectories it drove.
+- **The timetable policy**: each robot keeps to its own path, one entry per step, and a delayed robot falls one step
+  behind for each delay; nobody else changes anything. A plan has no slack (CBS's and prioritized planning's plans
+  are as tight as their costs), so this is how a delay turns into collisions; they are recorded and the run goes on.
+- **The ordered policy** (the default): the plan's *action dependency graph* (Hönig et al., "Persistent and Robust
+  Execution of MAPF Schedules in Warehouses", RA-L 2019). Each robot's path becomes its sequence of distinct cells
+  (waits dropped); each cell gets the queue of visits the plan makes to it, in the order it makes them. A robot moves
+  into its next cell when its visit is at the head of that cell's queue and the cell is empty or its occupant (the
+  visit before, the only robot who can be there) leaves in the same step. Moves are decided together: start with every
+  robot at the head of its next cell's queue, drop those whose cell is held by a robot not moving, and repeat until
+  nothing changes; what is left are chains of robots following each other and rotations around cycles, which the
+  model allows. Why it is safe:
+  - *No vertex conflict*: each cell is entered in the plan's order, one visit at a time, and only after the visit
+    before has left.
+  - *No swap*: if robots i (in u) and j (in v) could both move, j's visit to v comes just before i's and i's to u just
+    before j's, so in the plan i leaves u no later than j leaves v and the reverse: they leave at the same step, which
+    is a swap in the plan, and the plan is valid.
+  - *No deadlock*: in a step with no robot delayed, the move with the earliest planned time still to happen can be
+    made (everything it waits for was planned earlier, so has happened, except a robot leaving its cell at the same
+    planned time, which can move by the same argument; the chain ends at an empty cell or closes into a rotation).
+  - *Never later than planned* with no delays: by induction on planned time, every move happens no later than the
+    plan has it. So an undelayed run of a CBS plan costs exactly the plan (it can't cost more, and no valid plan costs
+    less), and of a prioritized plan no robot arrives later. (On prioritized planning's plans none arrived earlier
+    either: each path is the earliest arrival around those planned before it, so its waits are all needed in the
+    order the plan fixes.)
+
+  A collision, a swap or a deadlock under this policy would break these arguments, so each raises `SimulationError`
+  (tested by breaking a queue by hand) instead of being recorded.
+
 ## Measurements (day 4)
 
 On generated warehouse and random maps and on MovingAI maps (with their own scenarios): success rate within a time
 limit against the number of agents, runtime, and SOC of CBS against prioritized planning on the instances both
 solve. Every number in the README comes with the command that produced it and the machine it ran on.
+
+**As built.** `scripts/sweep.py` runs both planners on the first k agents of each of the 25 random scenarios of a map,
+for k = 10, 20, ..., with a time limit per try (5 s for the README's table). A try stopped by the limit, and
+prioritized planning's `kNoPath`, count as not solved; once a planner solves none at some k it isn't tried at larger
+ones. It reports solved / tried per planner, the median and largest wall time over all tries (the planners' own
+clocks), and on the instances both solve, PP's SOC over CBS's and each one's SOC over the lower bound (the sum of the
+agents' distances alone). Every plan goes through `validate()`, and CBS above prioritized planning is an error.
+`scripts/delays.py` executes both planners' plans under random delays with both policies: as a timetable, how often
+a run collides and how many times; ordered, the SOC added per robot-step of delay and the makespan added.
 
 ## Architecture
 
