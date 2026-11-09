@@ -180,9 +180,13 @@ examples/prioritized_vs_independent.py --agents 30 --seed 1`; CTest: `python.exa
 
 ## Results (day 4)
 
-Measured on an Apple M3, macOS 26.6.2, Apple Clang 21 (Release build), Python 3.11, on battery. The sweep ran alone
-on one core, but alongside a review agent working in its own worktree and the delay experiments (one core each), so
-times near a limit carry that load; solved counts at a 5 s limit can move by an instance or two with it. SOC,
+Measured on an Apple M3, macOS 26.6.2, Apple Clang 21 (Release build), Python 3.11, on battery. The sweep ran alone on
+one core, but alongside a review agent working in its own worktree and the delay experiments (one core each), so times
+near a limit carry that load; solved counts at a 5 s limit moved by two instances in one row when measured:
+random-32-32-20 re-run at 12:08-12:13 on a quiet machine on AC (load 3, nothing else heavy running;
+`results/day4/sweep_random_quiet.md`) gave the same outcome on 248 of its 250 tries, the two others CBS at 40 agents
+solved in 4.21 s and 3.38 s instead of stopped at 5 s (3 of 25 at 40 instead of 1), with 1.34x the nodes generated in
+the same 5 s (median over the 63 tries stopped both times), and the same SOC on every instance both runs solved. SOC,
 collision and delay counts don't depend on load. Every number comes from the command next to it.
 
 - **Tests**: 202 CTest tests (`ctest --preset dev -N`; 200 on day 3), of which `python.pytest` holds 97 pytest tests
@@ -817,7 +821,7 @@ fix before had missed; no round found a bug in the simulator.
   at a cell, so one long delay holds up every robot queued behind it there even when letting them go first would cost
   less (switchable dependency graphs are the known refinement).
 - The sweep's 5 s per try is short next to the 60 s or more common in MAPF papers, so CBS's success rates are lower
-  bounds for longer limits, and they moved a little with machine load (README "Results (day 4)").
+  bounds for longer limits, and they moved with machine load (two of 250 tries on one map; README "Results (day 4)").
 - The time limit is checked every 1,024 expansions, so a run can overshoot it by that much work.
 - Movement is 4-connected only, with unit costs; MovingAI's terrain types other than passable/blocked (`S`, `W`) are
   folded into those two (the MAPF maps use only `.`, `@` and `T`).
