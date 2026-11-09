@@ -33,4 +33,10 @@ if(PATHFINDER_BUILD_TESTS)
     COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/sweep.py --maps generated-warehouse --agents 4 8
       --scenarios 1-3 --time-limit 2)
   set_tests_properties(python.sweep PROPERTIES ENVIRONMENT "PYTHONPATH=${PROJECT_BINARY_DIR}/python")
+  # The delay experiment, briefly, on the generated floor: it exits 1 if an ordered run fails to complete or drives
+  # an invalid plan.
+  add_test(NAME python.delays
+    COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/delays.py --map generated-warehouse --agents 8
+      --scenarios 1-3 --seeds 3 --time-limit 2)
+  set_tests_properties(python.delays PROPERTIES ENVIRONMENT "PYTHONPATH=${PROJECT_BINARY_DIR}/python")
 endif()
