@@ -27,4 +27,10 @@ if(PATHFINDER_BUILD_TESTS)
   add_test(NAME python.example.prioritized
     COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/examples/prioritized_vs_independent.py --agents 30 --seed 1)
   set_tests_properties(python.example.prioritized PROPERTIES ENVIRONMENT "PYTHONPATH=${PROJECT_BINARY_DIR}/python")
+  # The day-4 benchmark sweep, briefly, on the generated floor (no downloaded maps): it exits 1 if a plan fails
+  # validate(), goes below the lower bound, or CBS costs more than prioritized planning.
+  add_test(NAME python.sweep
+    COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/sweep.py --maps generated-warehouse --agents 4 8
+      --scenarios 1-3 --time-limit 2)
+  set_tests_properties(python.sweep PROPERTIES ENVIRONMENT "PYTHONPATH=${PROJECT_BINARY_DIR}/python")
 endif()
