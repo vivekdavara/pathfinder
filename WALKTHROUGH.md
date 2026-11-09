@@ -2,22 +2,26 @@
 
 The questions an interviewer is likely to ask about this project, with short answers that point at the code. Day 1
 covers the model, the formats, the generators and the validator; day 2 the single-agent search and the baseline
-planner; day 3 conflict-based search; later days add the benchmarks and the visualizer.
+planner; day 3 conflict-based search; day 4 the simulator and the benchmarks; day 5 adds the visualizer.
 
 ## In two minutes
 
 Pathfinder plans paths for many robots on one grid so that none collide: multi-agent path finding. Day 1 built
-everything the planners will stand on: a strict reader for the MovingAI benchmark files every MAPF paper uses,
-seeded generators for random and warehouse floors, and `validate`, an independent checker that every plan from every
-planner will go through. Running the readers on the real benchmark set (690,275 start-goal pairs) turned up one wrong
-assumption of mine about the files, which is now documented, tested and handled. Day 2 added space-time A\* (one
-agent around reservations), checked against a brute-force oracle, and prioritized planning, the baseline that CBS
-will be measured against: fast, valid by construction, and visibly incomplete once the floor gets crowded. Day 3
-added conflict-based search: it returns plans of minimum sum of costs, which a brute-force search over joint states
-confirms on every tiny instance it finishes, and it shows the classic trade: plans 3% to 6% cheaper on average than
-prioritized planning's on the benchmark maps (up to 23%), but an effort that ranges from 9 to 14,331 tree nodes for
-ten agents on the same floor, and stops finishing at about 30 agents on a 32 x 32 map. It also exposed a
-performance bug in day 2's search, now fixed.
+everything the planners will stand on: a strict reader for the MovingAI benchmark files every MAPF paper uses, seeded
+generators for random and warehouse floors, and `validate`, an independent checker that every plan from every planner
+will go through. Running the readers on the real benchmark set (690,275 start-goal pairs) turned up one wrong
+assumption of mine about the files, which is now documented, tested and handled. Day 2 added space-time A\* (one agent
+around reservations), checked against a brute-force oracle, and prioritized planning, the baseline that CBS will be
+measured against: fast, valid by construction, and visibly incomplete once the floor gets crowded. Day 3 added
+conflict-based search: it returns plans of minimum sum of costs, which a brute-force search over joint states confirms
+on every tiny instance it finishes, and it shows the classic trade: plans 3% to 6% cheaper on average than prioritized
+planning's on the benchmark maps (up to 23%), but an effort that ranges from 9 to 14,331 tree nodes for ten agents on
+the same floor, and stops finishing at about 30 agents on a 32 x 32 map. It also exposed a performance bug in day 2's
+search, now fixed. Day 4 measured the trade properly (1,550 tries on four benchmark maps: prioritized planning solves
+nearly everything to 100 agents in milliseconds, CBS falls from 24 or 25 of 25 at 10 agents to none by 30 to 80, and
+where both solve prioritized planning costs 0.5% to 12% more on average) and built a simulator that runs plans with
+robots delayed. Run as timetables, plans collide after a handful of delays; run in each plan's order of visits to
+every cell, they can't collide or deadlock, and each step of delay costs the fleet 1.01 to 1.21 steps.
 
 ## The model
 
