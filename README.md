@@ -177,6 +177,67 @@ paths have a sum of costs of 435 (the lower bound) and 51 conflicts; prioritized
 prioritized planning first fails at 43 agents, in either order (`PYTHONPATH=build/dev/python .venv/bin/python
 examples/prioritized_vs_independent.py --agents 30 --seed 1`; CTest: `python.example.prioritized`).
 
+## Results (day 4)
+
+Measured on an Apple M3, macOS 26.6.2, Apple Clang 21 (Release build), Python 3.11, on battery. The sweep ran alone
+on one core, but alongside a review agent working in its own worktree and the delay experiments (one core each), so
+times near a limit carry that load; solved counts at a 5 s limit can move by an instance or two with it. SOC,
+collision and delay counts don't depend on load. Every number comes from the command next to it.
+
+- **Tests**: 202 CTest tests (`ctest --preset dev -N`; 200 on day 3), of which `python.pytest` holds 72 pytest tests
+  (51 on day 3): new are `tests/python/test_simulator.py` (18) and `tests/python/test_scripts.py` (3), and CTest runs
+  both experiment scripts briefly on the generated floor (`python.sweep`, `python.delays`). A mutation check of the
+  simulator (`.scratch/mutate_d4.py`, not committed) kills 11 of 11 mutants: the move fixed point, the queue order,
+  the queue head, following, both guards, the timetable's delays, the swap pairing, the vertex time, the delay count,
+  the costs.
+- **The simulator's checks agree with the library's.** On 40 delayed timetable runs (30 agents on the generated floor,
+  5 scenarios x 8 seeds, delays at 10% a step), the collisions the simulator records are exactly the conflicts
+  `validate()` and the conflict scanner find on the driven trajectories, pair by pair; all 40 runs collide (the test
+  asks for more than 20). The first run of that test found a bug: two robots stacked in one cell making the same move
+  while a third came the other way were two swaps, and the check, keyed by move, saw one (47 against 48).
+- **Ordered execution behaves as argued** (DESIGN.md "Python and the simulator"): on 13 CBS plans x 5 seeds at
+  each of 5%, 20% and 50% delays, never a collision or a deadlock, the trajectories valid, SOC never below CBS's, and
+  every cell visited in the plan's order; undelayed, every CBS plan's execution costs exactly the plan, robot by robot,
+  and on 14 prioritized plans no robot arrives later than planned (none earlier either).
+- **What delays do to a plan** (`scripts/delays.py`, command under "How to run"; warehouse-10-20-10-2-1, 20 agents,
+  the 23 of 25 scenarios both planners solve within 5 s, 20 delay seeds per plan and probability, so 460 runs a row).
+  As a timetable, one robot-step of delay in a hundred (each robot delayed with p = 0.01 at each step: about 16
+  robot-steps of delay per run) already makes 53.5% of prioritized planning's runs collide, and 23.5% of CBS's:
+
+  | planner | p | timetable: runs with a collision | collisions per run | ordered: delay robot-steps per run | ordered: SOC added per robot-step of delay | ordered: makespan added |
+  |---|---:|---:|---:|---:|---:|---:|
+  | PP | 0.01 | 53.5% | 5.50 | 15.96 | 1.050 | 1.87 |
+  | PP | 0.05 | 76.1% | 5.71 | 83.39 | 1.038 | 9.17 |
+  | PP | 0.1 | 85.0% | 5.85 | 175.67 | 1.033 | 19.47 |
+  | PP | 0.2 | 85.9% | 6.33 | 395.90 | 1.024 | 43.01 |
+  | CBS | 0.01 | 23.5% | 1.42 | 15.44 | 1.022 | 1.86 |
+  | CBS | 0.05 | 50.4% | 2.43 | 80.92 | 1.020 | 9.14 |
+  | CBS | 0.1 | 65.0% | 3.12 | 170.42 | 1.018 | 19.39 |
+  | CBS | 0.2 | 69.6% | 3.97 | 383.41 | 1.014 | 42.98 |
+
+  (A collision is a pair of robots in one cell, or swapping, at one step, so a pair stuck together three steps counts
+  three.) Executed in the plan's order instead, no run collides, and each robot-step of delay costs the fleet 1.01 to
+  1.05 robot-steps: on this sparse map a delay mostly costs only the robot it happens to. **Why PP's plans collide
+  twice as often on the same instances**: they hand off cells much more tightly. Counting following moves (a robot
+  moving into a cell in the step another moves out of it, the hand-off a one-step delay of the robot ahead turns into
+  a collision): 561 over PP's 23 plans against 169 over CBS's (`.scratch/d4/handoffs.py`, not committed; `delays.py`
+  now prints it per plan). Prioritized planning routes each robot by the earliest arrival around the ones before it,
+  which hugs their paths; CBS's paths are each robot's own shortest path, changed only where a conflict forced it.
+
+  One robot delayed once, every robot of every plan in turn, d steps halfway through its planned cost (460 runs a
+  row):
+
+  | planner | d | timetable: runs with a collision | ordered: SOC added | of it, on other robots | other robots later |
+  |---|---:|---:|---:|---:|---:|
+  | PP | 1 | 6.7% | 1.033 | 0.072 | 0.072 |
+  | PP | 3 | 8.3% | 3.254 | 0.293 | 0.117 |
+  | PP | 5 | 9.8% | 5.543 | 0.583 | 0.157 |
+  | CBS | 1 | 1.3% | 1.013 | 0.013 | 0.013 |
+  | CBS | 3 | 3.0% | 3.100 | 0.100 | 0.050 |
+  | CBS | 5 | 5.2% | 5.243 | 0.243 | 0.085 |
+
+  A five-step delay of one robot in a CBS plan holds up another robot in about one run in twelve.
+
 ## Results (day 3)
 
 Measured on an Apple M3, macOS 26.6.2, Apple Clang 21, on battery, with a review agent building in its own worktree
