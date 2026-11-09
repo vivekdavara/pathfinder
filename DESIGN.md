@@ -330,8 +330,11 @@ prioritized planning's `kNoPath`, count as not solved; once a planner solves non
 ones. It reports solved / tried per planner, the median and largest wall time over all tries (the planners' own
 clocks), and on the instances both solve, PP's SOC over CBS's and each one's SOC over the lower bound (the sum of the
 agents' distances alone). Every plan goes through `validate()`, and CBS above prioritized planning is an error.
-`scripts/delays.py` executes both planners' plans under random delays with both policies: as a timetable, how often
-a run collides and how many times; ordered, the SOC added per robot-step of delay and the makespan added.
+`scripts/delays.py` executes both planners' plans, on the instances both solve, under random delays with both
+policies: as a timetable, how often a run collides and how many times; ordered, the SOC added per robot-step of delay
+and the makespan added; and each robot delayed once, d steps halfway through its planned cost. Every try's record and
+every printed table is kept in `results/day4/` with its command and commit, and `scripts/sweep_summary.py` rebuilds
+the README's table from the records.
 
 ## Architecture
 
