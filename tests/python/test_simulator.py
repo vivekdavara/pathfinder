@@ -1,6 +1,8 @@
 """The step-by-step simulator (pathfinder.simulator): it replays plans exactly, sees every collision a delay causes,
 and its own step checks agree with validate() on what it drove."""
 
+import functools
+
 import pytest
 
 import pathfinder as pf
@@ -144,3 +146,143 @@ def test_a_run_stops_at_max_steps():
     run = sim.run(random_delays(1.0, 0), max_steps=5)  # everyone delayed at every step: nobody ever moves
     assert not run.completed and run.steps == 5 and run.costs == [] and run.delay_steps == 10
     assert issubclass(SimulationError, RuntimeError)
+
+
+# --- the ordered policy ---
+
+
+def random_instances(agents, seeds, size=16, obstacles=20):
+    for seed in seeds:
+        grid = pf.random_map(size, size, obstacles, seed)
+        yield pf.make_instance(grid, pf.random_scenario(grid, agents, seed, "random.map"), agents)
+
+
+@functools.cache
+def cbs_plans():
+    # Solved CBS plans (optimal), from instances small enough to solve fast in a Debug build; computed once (the
+    # simulator changes neither instances nor plans).
+    found = []
+    for instance in list(warehouse_instances(10, range(1, 6))) + list(random_instances(12, range(1, 11))):
+        result = pf.cbs(instance, max_nodes=20_000)
+        if result.solved:
+            found.append((instance, result))
+    assert len(found) >= 10
+    return tuple(found)
+
+
+def visit_order(trajectories):
+    # Each cell's visitors in the order they entered it (a robot entering again counts again).
+    order = {}
+    events = []
+    for i, cells in enumerate(trajectories):
+        for t, c in enumerate(cells):
+            if t == 0 or cells[t - 1] != c:
+                events.append((t, c, i))
+    for t, c, i in sorted(events):
+        order.setdefault(c, []).append(i)
+    return order
+
+
+def test_ordered_follower_waits_for_a_delayed_leader():
+    instance, plan = corridor()
+    sim = Simulator(instance, plan)  # the default policy
+    assert sim.policy == "ordered"
+    first = sim.step(delayed=[1])
+    assert first.moved == () and first.collisions == ()  # robot 0 holds: robot 1 is still in the cell it wants
+    run = sim.run()
+    assert not run.collisions and run.costs == [4, 4] and run.extra_cost == 2
+
+
+def test_ordered_drops_the_plans_waits():
+    instance, _ = corridor()
+    plan = [[0, 0, 0, 1, 2, 3], [1, 2, 3, 4]]  # robot 0 waits for nothing
+    run = Simulator(instance, plan).run()
+    assert run.costs == [3, 3] and run.extra_cost == -2
+    timetable = Simulator(instance, plan, policy="timetable").run()
+    assert timetable.costs == [5, 3]
+
+
+def test_ordered_moves_a_rotation_in_one_step():
+    # Four robots on a 2 x 2 grid each move to the next cell clockwise at once: a rotation, which the model allows.
+    # Each waits for the robot ahead to leave, so the moves must be decided together, not one robot at a time.
+    g = pf.Grid(2, 2)
+    cycle = [0, 1, 3, 2]
+    instance = pf.Instance(g, [pf.Agent(cycle[i], cycle[(i + 1) % 4]) for i in range(4)])
+    plan = [[cycle[i], cycle[(i + 1) % 4]] for i in range(4)]
+    sim = Simulator(instance, plan)
+    step = sim.step()
+    assert step.moved == (0, 1, 2, 3) and sim.done and sim.execution().costs == [1, 1, 1, 1]
+    # Hold one of them and nobody can move.
+    sim = Simulator(instance, plan)
+    assert sim.step(delayed=[2]).moved == ()
+
+
+def test_ordered_execution_of_an_optimal_plan_costs_exactly_the_plan():
+    # With no delays every move happens no later than planned, so no robot's cost can go up; CBS's SOC is the
+    # least any valid plan has, and the executed trajectories are one, so none can go down either.
+    for instance, result in cbs_plans():
+        sim = Simulator(instance, result.plan)
+        run = sim.run()
+        assert run.completed and not run.collisions
+        assert run.costs == pf.validate(instance, result.plan).costs
+        assert pf.validate(instance, sim.trajectories).valid
+
+
+def test_ordered_execution_never_makes_a_robot_later_than_planned():
+    # The guarantee is "no later". On prioritized planning's plans it comes out "exactly on time" for every robot
+    # here: each path is the earliest arrival around the robots planned before it, so its waits are all needed in
+    # the order the plan fixes (a first version of this test expected some to be dropped, and none ever was).
+    solved = 0
+    for instance in list(warehouse_instances(30, range(1, 6))) + list(random_instances(25, range(1, 11))):
+        result = pf.prioritized_planning(instance)
+        if not result.solved:
+            continue
+        sim = Simulator(instance, result.plan)
+        run = sim.run()
+        planned = pf.validate(instance, result.plan).costs
+        assert all(c <= p for c, p in zip(run.costs, planned))
+        assert pf.validate(instance, sim.trajectories).valid
+        solved += 1
+    assert solved >= 10
+
+
+@pytest.mark.parametrize("probability", [0.05, 0.2, 0.5])
+def test_ordered_execution_under_random_delays_never_collides_and_keeps_the_plans_order(probability):
+    runs = 0
+    for instance, result in cbs_plans():
+        planned_order = visit_order(padded(result.plan, max(len(p) for p in result.plan)))
+        for seed in range(5):
+            sim = Simulator(instance, result.plan)
+            run = sim.run(random_delays(probability, seed))
+            assert run.completed and not run.collisions  # a collision or a deadlock would have raised
+            check = pf.validate(instance, sim.trajectories)
+            assert check.valid and list(check.costs) == run.costs
+            assert run.sum_of_costs >= result.sum_of_costs  # nothing valid beats CBS
+            assert visit_order(sim.trajectories) == planned_order
+            runs += 1
+    assert runs >= 50
+
+
+def test_the_same_seed_delays_both_policies_alike():
+    instance = next(warehouse_instances(30, [1]))
+    plan = pf.prioritized_planning(instance).plan
+    a = Simulator(instance, plan, policy="timetable")
+    b = Simulator(instance, plan, policy="ordered")
+    da, db = random_delays(0.1, 7), random_delays(0.1, 7)
+    for t in range(10):
+        assert list(da(t, a)) == list(db(t, b))
+
+
+def test_the_ordered_policys_guards_fire_on_a_broken_order():
+    # No valid plan can make the ordered policy deadlock or swap (Simulator's docstring), so these break its state
+    # by hand: the guards are what stops a bug there from hanging run() or driving robots through each other.
+    instance, plan = corridor()
+    sim = Simulator(instance, plan)
+    sim._queue[2].reverse()  # robot 0 must now enter cell 2 before robot 1, who is in the cell robot 0 needs first
+    with pytest.raises(SimulationError, match="deadlock"):
+        sim.run(max_steps=100)  # bounded: without the guard this would loop for ever
+    sim = Simulator(instance, plan)
+    sim._cells = [[0, 1], [1, 0]]
+    sim._queue = {0: [(0, 0), (1, 1)], 1: [(1, 0), (0, 1)]}
+    with pytest.raises(SimulationError, match="would swap"):  # before moving; the step check would also catch it
+        sim.step()

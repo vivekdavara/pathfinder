@@ -215,13 +215,72 @@ class Simulator:
             self.positions[i] = path[self._index[i]]
         return moved
 
-    # --- the ordered policy (filled in with it) ---
+    # --- the ordered policy ---
 
     def _init_ordered(self) -> None:
-        raise NotImplementedError("the ordered policy")
+        # Each robot's path as its visits: the cells it goes through, the plan's waits dropped. A visit is (robot, k):
+        # robot's k-th cell. Each cell's visits are queued in the order the plan enters them (no two at the same time:
+        # that would be a vertex conflict), and _next[cell] is the place in the queue of the next visit allowed in.
+        self._cells: list[list[int]] = []
+        entries = []
+        for i, path in enumerate(self._paths):
+            cells: list[int] = []
+            for t, c in enumerate(path):
+                if not cells or cells[-1] != c:
+                    entries.append((t, c, i, len(cells)))
+                    cells.append(c)
+            self._cells.append(cells)
+        entries.sort()
+        self._queue: dict[int, list[tuple[int, int]]] = {}
+        for _, c, i, k in entries:
+            self._queue.setdefault(c, []).append((i, k))
+        self._next = dict.fromkeys(self._queue, 0)
+        self._visit = [0] * len(self._paths)
+        # Who is in each occupied cell. Every robot starts in its first visit, the first in its cell's queue (it
+        # entered at time 0).
+        self._occupant: dict[int, int] = {}
+        for i, cells in enumerate(self._cells):
+            assert self._queue[cells[0]][0] == (i, 0)
+            self._next[cells[0]] = 1
+            self._occupant[cells[0]] = i
 
     def _step_ordered(self, held: set[int]) -> list[int]:
-        raise NotImplementedError("the ordered policy")
+        # Who may move: a robot not delayed, with a cell still to go to, whose visit there is the next in that cell's
+        # queue. (The robot before it in the queue may still be in the cell; it is the only one who can be.)
+        want: dict[int, int] = {}
+        for i, cells in enumerate(self._cells):
+            k = self._visit[i]
+            if i in held or k == len(cells) - 1:
+                continue
+            v = cells[k + 1]
+            if self._queue[v][self._next[v]] == (i, k + 1):
+                want[i] = v
+        # Who does move: a robot whose cell-to-be is empty, or whose occupant moves out in the same step. Dropping the
+        # others until nothing changes leaves chains of robots following each other and rotations around cycles.
+        moving = set(want)
+        changed = True
+        while changed:
+            changed = False
+            for i in list(moving):
+                occupant = self._occupant.get(want[i])
+                if occupant is not None and occupant not in moving:
+                    moving.discard(i)
+                    changed = True
+        for i in moving:
+            occupant = self._occupant.get(want[i])
+            if occupant is not None and want[occupant] == self.positions[i]:
+                raise SimulationError(f"robots {i} and {occupant} would swap between {self.time} and {self.time + 1}")
+        if not moving and not held and not self.done:
+            raise SimulationError(f"no robot can move at time {self.time} and none is delayed: a deadlock")
+        for i in moving:
+            del self._occupant[self.positions[i]]
+        for i in moving:
+            v = want[i]
+            self._occupant[v] = i
+            self._next[v] += 1
+            self._visit[i] += 1
+            self.positions[i] = v
+        return list(moving)
 
     # --- the checks ---
 
