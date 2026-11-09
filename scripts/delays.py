@@ -18,11 +18,14 @@ keeps the instances both solve, so the two planners are compared on the same ins
      robot-step of delay (1.0 would mean each delay costs only the delayed robot its own step; above 1, delays spread
      to other robots; below 1, some are absorbed), and the makespan above the plan's.
 2. One robot delayed once (--single, steps): every robot of every plan in turn, delayed for d steps halfway through
-   its planned cost (at time cost // 2; robots that start on their goals and stay are skipped). As a timetable: the runs with a collision. Ordered: the SOC above the plan's,
-   what of it fell on the other robots, and how many other robots arrived later.
+   its planned cost (at time cost // 2; robots that start on their goals and stay are skipped). As a timetable: the
+   runs with a collision. Ordered: the SOC above the plan's, what of it fell on the other robots, and how many other
+   robots arrived later.
 
-Prints a Markdown table for each. It exits 1 if an ordered run doesn't complete or drives an invalid plan (the
-simulator raises on a collision itself).
+Also printed: following moves per plan (a robot moving into a cell in the step another moves out of it), the tight
+hand-offs a one-step delay of the robot ahead turns into a collision under the timetable. Prints a Markdown table
+for each experiment. It exits 1 if an ordered run doesn't complete or drives an invalid plan (the simulator raises
+on a collision itself).
 """
 
 from __future__ import annotations
@@ -55,6 +58,18 @@ def instances(name: str, agents: int, numbers: range, data: Path):
         yield n, pf.make_instance(grid, scen, agents)
 
 
+def following_moves(plan: list[list[int]]) -> int:
+    """How often a robot moves into a cell in the same step another robot moves out of it: the plan's tightest
+    hand-offs, the ones a one-step delay of the robot ahead turns into a collision under the timetable."""
+    length = max(len(p) for p in plan)
+    padded = [list(p) + [p[-1]] * (length - len(p)) for p in plan]
+    count = 0
+    for t in range(length - 1):
+        left = {path[t] for path in padded if path[t + 1] != path[t]}
+        count += sum(1 for path in padded if path[t + 1] != path[t] and path[t + 1] in left)
+    return count
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--data", type=Path, default=ROOT / "data")
@@ -78,7 +93,12 @@ def main(argv: list[str] | None = None) -> int:
             plans["cbs"].append((instance, cbs))
     print(f"{args.map}, {args.agents} agents: both planners solved {len(plans['cbs'])} of {tried} scenarios "
           f"({args.scenarios}, time limit {args.time_limit:g} s); {args.seeds} delay seeds per plan and "
-          f"probability\n")
+          f"probability")
+    if plans["cbs"]:
+        print("following moves per plan (a robot entering a cell in the step another leaves it): " +
+              ", ".join(f"{name} {sum(following_moves(r.plan) for _, r in plans[name]) / len(plans[name]):.1f}"
+                        for name in ("pp", "cbs")))
+    print()
     print("| planner | p | runs | timetable: runs with a collision | collisions per run | ordered: delay "
           "robot-steps per run | extra SOC per delay | extra makespan per run |")
     print("|---|---:|---:|---:|---:|---:|---:|---:|")
