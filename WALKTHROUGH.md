@@ -302,15 +302,14 @@ to 50; on room-32-32-4 24, 12, 0 from 10 to 30. Where both solve, prioritized pl
 the map fills: on empty-32-32 0.5% more on average at 10 agents, 9.3% at 50 (up to 17.6% on one instance).
 
 **Why does CBS fail on an empty map, where the answer is nearly the lower bound?**
-On empty-32-32 its solved plans are at the lower bound on 24 of 25 instances at 10 agents and within 0.07% at every
-size, so the optimum is easy to describe; CBS just can't prove it. Two robots whose shortest paths cross on an open
+On empty-32-32 its solved plans are at the lower bound on 24 of 25 instances at 10 agents and on 81 of the 94 it
+solved at any size, never more than 0.6% above it, so the optimum is easy to describe; CBS just can't prove it. Two robots whose shortest paths cross on an open
 grid have many equally short ways to dodge, and each split's two children usually cost the same, so the tree fills
-with ties (the known "rectangle" symmetry). Failures had generated a median of about 80,000 nodes a second when the
-limit stopped them.
+with ties (the known "rectangle" symmetry). It isn't slow per node: about 71,000 nodes a second, and its failures had
+a median of 354,684 nodes when the limit stopped them.
 
 **Would a longer time limit help?**
-Not much, by this data: of the 235 tries CBS solved on the three 32 x 32 maps, 204 took under 10 ms and only 9 took
-between 1 and 5 s. It's bimodal: an instance is easy or it's hopeless for plain CBS. That's a measurement of this
+Not much, by this data: of the 269 tries CBS solved, 228 took under 10 ms and only 11 took between 1 and 5 s. It's bimodal: an instance is easy or it's hopeless for plain CBS. That's a measurement of this
 sweep, not a proof; the fix that matters is algorithmic (cardinal conflicts first, symmetry reasoning), not seconds.
 
 **So which planner would you deploy?**
