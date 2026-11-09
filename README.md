@@ -3,14 +3,16 @@
 Collision-free paths for many robots on a grid warehouse map at once: multi-agent path finding (MAPF) by
 conflict-based search, against prioritized planning as the baseline, in C++20 with Python bindings for experiments.
 
-**Status: day 3 of 5.** Built so far: the specification ([DESIGN.md](DESIGN.md)), the grid, the MovingAI map and
+**Status: day 4 of 5.** Built so far: the specification ([DESIGN.md](DESIGN.md)), the grid, the MovingAI map and
 scenario formats, a plan file format, seeded map and scenario generators (random and warehouse floors), BFS and
 octile distances, the plan validator every planner is tested against, a CLI, the Python module, a script that
 fetches the MovingAI MAPF benchmark set, and CI (day 1); then space-time A\* with a reservation table, checked against
 a brute-force oracle, and prioritized planning, the baseline planner, in the library, the CLI (`pathfinder plan`)
 and Python (day 2); then conflict-based search, which returns plans of minimum sum of costs, checked against a
-brute-force optimum, with a fast conflict scanner, in the library, the CLI (`--planner cbs`) and Python (day 3).
-Next: benchmarks and a step-by-step simulator (day 4), a replay visualizer and v1.0.0 (day 5).
+brute-force optimum, with a fast conflict scanner, in the library, the CLI (`--planner cbs`) and Python (day 3);
+then a step-by-step simulator that executes plans with robots delayed, two ways (as a timetable, and in the plan's
+order of visits to each cell, which can't collide), and the benchmarks: both planners across agent counts on four
+MovingAI maps, and what delays do to their plans (day 4). Next: a replay visualizer and v1.0.0 (day 5).
 
 ## Why
 
@@ -53,7 +55,9 @@ flowchart LR
   FMT --> VAL
   GRID --> CLI["pathfinder CLI"]
   VAL --> PY["Python module<br/>(pybind11)"]
-  PY --> EXP["experiments, simulator,<br/>visualizer (days 4-5)"]
+  PY --> SIM["simulator<br/>(timetable, ordered; day 4)"]
+  PY --> EXP["sweep and delay<br/>experiments (day 4)"]
+  SIM --> EXP
 ```
 
 ## Layout
@@ -72,9 +76,9 @@ flowchart LR
 | `include/pathfinder/planner.hpp`, `src/planner_common.hpp`, `src/prioritized.cpp`, `src/cbs.cpp` | the planners' limits and result, what they check the same way; prioritized planning; CBS |
 | `include/pathfinder/conflicts.hpp`, `src/conflicts.cpp` | the conflict scanner: a plan's conflicts, counted, and the earliest (what CBS splits on) |
 | `tools/pathfinder_cli.cpp` | the `pathfinder` command |
-| `python/` | the pybind11 module `pathfinder._core` and the `pathfinder` package |
+| `python/` | the pybind11 module `pathfinder._core` and the `pathfinder` package, with `pathfinder/simulator.py` (day 4) |
 | `tests/` | GoogleTest suites, `cli_test.sh`, `python/` (pytest), `data/` (small hand-written files), `review/` (the review's tests) |
-| `scripts/` | `fetch_maps.py` (the benchmark set), `check_maps.sh`, `gcc_check.sh`, `pp_sweep.py` (prioritized planning on the benchmark maps) |
+| `scripts/` | `fetch_maps.py` (the benchmark set), `check_maps.sh`, `gcc_check.sh`, `pp_sweep.py` (prioritized planning on the benchmark maps, day 2), `sweep.py` (both planners across agent counts), `delays.py` (plans executed under delays) |
 | `examples/` | `independent_paths.py`: each agent's shortest path alone, and the conflicts the validator finds; `prioritized_vs_independent.py`: the same floor planned both ways, and where prioritized planning stops |
 | `bench/` | the Google Benchmark suite (`make bench`) |
 
@@ -136,6 +140,29 @@ print(pf.scan_conflicts(g, [[a.start] for a in inst.agents]))  # (count, first C
 table = pf.ReservationTable(g)                                # one agent around another's path
 table.reserve_path(r.plan[0])
 print(pf.space_time_astar(g, inst.agents[1].start, inst.agents[1].goal, table).path)
+```
+
+The simulator (`python/pathfinder/simulator.py`) executes a valid plan step by step, with any robot delayed at any
+step:
+
+```python
+from pathfinder.simulator import Simulator, delay_robot, random_delays
+
+sim = Simulator(inst, r.plan, policy="ordered")         # or "timetable"; r: the solved plan above
+step = sim.step(delayed=[3])                            # robot 3 holds its cell for this step
+run = sim.run(random_delays(0.05, seed=1))              # or delay_robot(3, at=10, steps=2)
+print(run.completed, run.costs, run.extra_cost, run.collisions)  # ordered: never a collision
+print(pf.validate(inst, sim.trajectories).valid)        # what the robots drove, as a plan
+```
+
+The day-4 experiments (both need `make maps release` first, and `PYTHONPATH=build/release/python`; each also takes
+`--maps generated-warehouse` / `--map generated-warehouse`, synthetic, which CTest runs briefly):
+
+```bash
+.venv/bin/python scripts/sweep.py --maps empty-32-32 random-32-32-20 room-32-32-4 warehouse-10-20-10-2-1 \
+  --agents 10 20 30 40 50 60 70 80 90 100 --scenarios 1-25 --time-limit 5 --jsonl sweep.jsonl
+.venv/bin/python scripts/delays.py --map warehouse-10-20-10-2-1 --agents 20 --scenarios 1-25 \
+  --probabilities 0.01 0.05 0.1 0.2 --seeds 20 --single 1 3 5 --time-limit 5
 ```
 
 `examples/independent_paths.py` shows why a planner is needed: it gives each agent its own shortest path, ignoring
