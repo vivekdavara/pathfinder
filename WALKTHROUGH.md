@@ -440,12 +440,26 @@ its distance tables before looking at the clock; with 300 agents on a big grid t
 Its best clean check compared CBS with its own brute force on instances my generator never makes (agents starting
 on their goals, goals that are a permutation of the starts): no disagreement in about 5,300 instances.
 
+**What did the day-4 review find?**
+No bug, and one false claim of mine (the prioritized-planning robot that arrives early, above). Its most useful work
+was making the tests stronger: eight mutants of the simulator survived my tests (a swap recorded backwards, the
+ordered policy's collision raise switched off, `makespan` computed as a minimum, both `finished()` rules, ...), and its
+tests kill all eight. Its best clean check ran the ordered policy step by step against its own executor of the
+dependency graph, written differently (an explicit list of each visit's earlier visitors), under adversarial delay
+schedules such as "delay whoever could move": 260,064 runs, the same moves at every step. It also noted three script
+edges I then fixed: the sweep's give-up rule assumed ascending agent counts, a time limit of 0 meant none, and a
+ratio divided by zero when every agent starts on its goal.
+
 **Tell me about a bug in your own test tooling.**
 Two. My first test of the bounded draw's bias used n = 2^63 + 1 and expected about half the draws above 2^63 - 1;
 but only two values lie there, so it failed on correct code. The right example is n = 3 · 2^62, where a plain modulo
 puts half the draws in the bottom third instead of a third, and the test now fails on a mutant with a plain modulo.
 And the parser robustness test chose between duplicating and dropping a line with a fresh random number instead of
-the case it was in, so it duplicated 1 time in 6 instead of half the time.
+the case it was in, so it duplicated 1 time in 6 instead of half the time. Day 4 added a third: my mutation script
+backed up the simulator from the working file before each run, and when one run was killed mid-mutant (a deadlock
+mutant hung its tests), the next run backed up the mutant and "restored" it. A `cmp` against the earlier backup and
+the next run's own check (the line it meant to mutate was gone) caught it before any commit; the script now restores
+from a known-good copy and bounds each test run at 60 s.
 
 ## Engineering
 
