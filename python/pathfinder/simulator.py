@@ -256,16 +256,21 @@ class Simulator:
             if self._queue[v][self._next[v]] == (i, k + 1):
                 want[i] = v
         # Who does move: a robot whose cell-to-be is empty, or whose occupant moves out in the same step. Dropping the
-        # others until nothing changes leaves chains of robots following each other and rotations around cycles.
+        # others until nothing changes leaves chains of robots following each other and rotations around cycles. A
+        # dropped robot stays in its cell, so the drop passes back to the one robot that wants that cell (a cell is
+        # wanted by at most one: the head of its queue), and on down the chain: each robot is dropped at most once, so
+        # this is linear in the robots. (The first version re-scanned every robot until nothing changed: quadratic
+        # when a long chain is blocked at its front, 2.2 s for 400 followers in a corridor.)
+        wanted_by = {v: i for i, v in want.items()}
         moving = set(want)
-        changed = True
-        while changed:
-            changed = False
-            for i in list(moving):
-                occupant = self._occupant.get(want[i])
-                if occupant is not None and occupant not in moving:
-                    moving.discard(i)
-                    changed = True
+        drop = [i for i, v in want.items() if self._occupant.get(v, i) not in want]
+        while drop:
+            i = drop.pop()
+            if i in moving:
+                moving.discard(i)
+                behind = wanted_by.get(self.positions[i])
+                if behind is not None:
+                    drop.append(behind)
         for i in moving:
             occupant = self._occupant.get(want[i])
             if occupant is not None and want[occupant] == self.positions[i]:

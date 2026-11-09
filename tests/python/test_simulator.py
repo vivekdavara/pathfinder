@@ -286,3 +286,18 @@ def test_the_ordered_policys_guards_fire_on_a_broken_order():
     sim._queue = {0: [(0, 0), (1, 1)], 1: [(1, 0), (0, 1)]}
     with pytest.raises(SimulationError, match="would swap"):  # before moving; the step check would also catch it
         sim.step()
+
+
+def test_a_long_chain_moves_at_its_leaders_pace():
+    # 30 robots following each other down a 1 x 60 corridor, each n cells to its goal, the leader (robot 29) delayed
+    # at every even step: it moves at odd steps only and arrives at t = 60, and every follower, each waiting for the
+    # one ahead, moves in the same steps and arrives with it. (The shape that made the first fixed point quadratic.)
+    n = 30
+    g = pf.Grid(2 * n, 1)
+    instance = pf.Instance(g, [pf.Agent(i, i + n) for i in range(n)])
+    plan = [list(range(i, i + n + 1)) for i in range(n)]
+    sim = Simulator(instance, plan)
+    run = sim.run(lambda t, s: (n - 1,) if t % 2 == 0 else ())
+    assert run.completed and not run.collisions
+    assert run.costs == [2 * n] * n and run.extra_cost == n * n
+    assert [len(set(sim.trajectories[i][t] for t in (0, 1))) for i in range(n)] == [1] * n  # nobody moves at step 0
