@@ -218,6 +218,9 @@ test("a robot's summary by a moment", () => {
                "1 at t = 2, 1 at t = 3");
   assert.equal(player.describeRobot(r, 1, 0), "Robot 1: (1, 0) → (4, 0), planned cost 3 · 1 delay step · no collisions");
   assert.match(player.describeRobot(swap(), 0, 0), /collided with 1 at t = 0 \(swap\)/);
+  // The robot listed second in a collision sees the first as the other.
+  assert.deepEqual(player.robotSummary(r, 1, 1).collisions, [{ other: 0, time: 1, kind: "vertex" }]);
+  assert.match(player.describeRobot(swap(), 1, 0), /collided with 0 at t = 0 \(swap\)$/);
 });
 
 test("labels", () => {

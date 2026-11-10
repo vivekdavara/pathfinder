@@ -171,7 +171,7 @@ def test_a_link_can_select_a_robot(runs, tmp_path):
 @pytest.mark.parametrize("fragment", ["", "#robot=99", "#robot=x"])
 def test_without_a_selection_the_page_says_how_to_make_one(runs, tmp_path, fragment):
     dom = dump_dom(page_for(runs, tmp_path, probe=False), tmp_path, fragment)
-    assert robot_lines(dom) == ["Click a robot to follow it."] * 2
+    assert robot_lines(dom) == ["Click a robot to follow it."] * 2 and text_of(dom, "error") == ""
 
 
 # Clicks the first canvas on robot 6 at time 0, then on a wall cell, and records the robot lines after each.
