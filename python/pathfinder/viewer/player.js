@@ -80,12 +80,55 @@ function countsAt(replay, time) {
   const collisions = replay.collisions.filter((c) => c.time <= time).length;
   let finished = 0;
   replay.trajectories.forEach((path, i) => {
-    const goal = replay.robots[i].goal;
-    let arrived = path.length - 1;
-    while (arrived > 0 && path[arrived - 1] === goal) arrived--;
-    if (path[path.length - 1] === goal && arrived <= time) finished++;
+    const arrived = arrival(path, replay.robots[i].goal);
+    if (arrived !== null && arrived <= time) finished++;
   });
   return { delays, collisions, finished };
+}
+
+// When a path arrives on its goal for good (DESIGN.md's cost: the first time from which it stays there), or null if
+// it doesn't end there.
+function arrival(path, goal) {
+  if (path[path.length - 1] !== goal) return null;
+  let t = path.length - 1;
+  while (t > 0 && path[t - 1] === goal) t--;
+  return t;
+}
+
+const ROBOT_RADIUS = 0.38; // in cells, as drawn
+
+// The robot drawn at a point of the map at a moment (x and y in cells from the map's top left corner): of the robots
+// whose disc holds the point, the one drawn last (the highest number, on top); null if none.
+function robotAt(replay, time, x, y) {
+  const positions = positionsAt(replay, time);
+  for (let i = positions.length - 1; i >= 0; i--) {
+    const [px, py] = positions[i];
+    if (Math.hypot(x - (px + 0.5), y - (py + 0.5)) <= ROBOT_RADIUS) return i;
+  }
+  return null;
+}
+
+// One robot in one run, by a moment: its start and goal, its planned cost, when it arrived for good (null if not
+// yet), the steps it was delayed, and the collisions it was in.
+function robotSummary(replay, i, time) {
+  const r = replay.robots[i];
+  const driven = arrival(replay.trajectories[i], r.goal);
+  let delays = 0;
+  for (let t = 0; t < steps(replay) && t <= time; t++) if (replay.delayed[t].includes(i)) delays++;
+  const collisions = replay.collisions.filter((c) => c.time <= time && (c.a === i || c.b === i))
+    .map((c) => ({ other: c.a === i ? c.b : c.a, time: c.time, kind: c.kind }));
+  return { start: xy(replay, r.start), goal: xy(replay, r.goal), planned: arrival(replay.plan[i], r.goal),
+           arrived: driven !== null && driven <= time ? driven : null, delays, collisions };
+}
+
+function describeRobot(replay, i, time) {
+  const s = robotSummary(replay, i, time);
+  const parts = [`Robot ${i}: (${s.start.join(", ")}) → (${s.goal.join(", ")}), planned cost ${s.planned}`];
+  if (s.arrived !== null) parts[0] += `, arrived at ${s.arrived}`;
+  parts.push(count(s.delays, "delay step"));
+  parts.push(s.collisions.length === 0 ? "no collisions" : "collided with " +
+    s.collisions.map((c) => `${c.other} at t = ${c.time}${c.kind === "swap" ? " (swap)" : ""}`).join(", "));
+  return parts.join(" · ");
 }
 
 // A colour per robot: hues spread by the golden angle, so neighbouring indices differ. The same formula as
@@ -146,11 +189,20 @@ function asReplays(doc) {
   return list;
 }
 
-// The moment a link asks for, "#t=18" or "#t=2.5"; null for anything else (a negative or non-numeric time, another
-// fragment). The page clamps it to the run.
-function timeFromHash(hash) {
-  const m = /^#t=(\d+(?:\.\d+)?)$/.exec(hash || "");
-  return m ? Number(m[1]) : null;
+// What a link asks for: "#t=18" (a moment, clamped to the run by the page), "#robot=6" (a robot selected), or both,
+// "#t=18&robot=6". Anything else (a negative or non-numeric value, an unknown or repeated key) asks for nothing.
+function parseHash(hash) {
+  const none = { time: null, robot: null };
+  if (!hash || hash === "#") return none;
+  const out = { time: null, robot: null };
+  for (const part of hash.slice(1).split("&")) {
+    const t = /^t=(\d+(?:\.\d+)?)$/.exec(part);
+    const r = /^robot=(\d+)$/.exec(part);
+    if (t && out.time === null) out.time = Number(t[1]);
+    else if (r && out.robot === null) out.robot = Number(r[1]);
+    else return none;
+  }
+  return out;
 }
 
 function count(n, what) {
@@ -170,7 +222,7 @@ function css(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-function drawReplay(canvas, replay, time, cellSize) {
+function drawReplay(canvas, replay, time, cellSize, selected = null) {
   const dpr = window.devicePixelRatio || 1;
   const w = replay.map.width * cellSize;
   const h = replay.map.height * cellSize;
@@ -214,13 +266,29 @@ function drawReplay(canvas, replay, time, cellSize) {
     g.stroke();
     g.setLineDash([]);
   });
+  // The selected robot's planned path (dashed) and the trajectory it has driven so far (solid).
+  if (selected !== null) {
+    const line = (points, width, dash, alpha) => {
+      g.strokeStyle = colour(selected, 45, alpha);
+      g.lineWidth = width;
+      g.setLineDash(dash);
+      g.beginPath();
+      points.forEach((p, k) => (k === 0 ? g.moveTo(...centre(p)) : g.lineTo(...centre(p))));
+      g.stroke();
+      g.setLineDash([]);
+    };
+    line(replay.plan[selected].map((c) => xy(replay, c)), Math.max(1, cellSize / 10),
+         [Math.max(2, cellSize / 5), Math.max(2, cellSize / 5)], 0.8);
+    const driven = replay.trajectories[selected].slice(0, Math.floor(clampTime(replay, time)) + 1).map((c) => xy(replay, c));
+    line([...driven, robots[selected]], Math.max(1.5, cellSize / 6), [], 0.9);
+  }
   // Robots; the ones delayed in this step with a thick outline and a pause sign.
   const delayed = new Set(delayedAt(replay, time));
   robots.forEach((p, i) => {
     const [cx, cy] = centre(p);
     g.fillStyle = colour(i);
     g.beginPath();
-    g.arc(cx, cy, cellSize * 0.38, 0, 2 * Math.PI);
+    g.arc(cx, cy, cellSize * ROBOT_RADIUS, 0, 2 * Math.PI);
     g.fill();
     if (delayed.has(i)) {
       g.strokeStyle = css("--delay");
@@ -239,6 +307,15 @@ function drawReplay(canvas, replay, time, cellSize) {
       g.fillText(String(i), cx, cy + 0.5);
     }
   });
+  // The selected robot: a ring in the text colour around it.
+  if (selected !== null) {
+    const [cx, cy] = centre(robots[selected]);
+    g.strokeStyle = css("--text");
+    g.lineWidth = Math.max(1.5, cellSize / 12);
+    g.beginPath();
+    g.arc(cx, cy, cellSize * 0.47, 0, 2 * Math.PI);
+    g.stroke();
+  }
   // Collisions: a red ring on the cell, or a red bar across the swapped edge.
   g.strokeStyle = css("--collision");
   g.lineWidth = Math.max(2, cellSize / 6);
@@ -260,7 +337,7 @@ const PANEL_PADDING = 12; // viewer.html's figure padding
 const WIDE = 1.6;
 
 function startPage() {
-  const state = { replays: [], time: 0, playing: false, speed: 2, last: null };
+  const state = { replays: [], time: 0, playing: false, speed: 2, last: null, selected: null };
   const $ = (id) => document.getElementById(id);
   const panels = $("panels");
   const slider = $("time");
@@ -281,16 +358,19 @@ function startPage() {
     $("clock").textContent = `t = ${state.time.toFixed(1)} / ${end()}`;
     state.replays.forEach((replay, k) => {
       const panel = panels.children[k];
-      drawReplay(panel.querySelector("canvas"), replay, state.time, cellSize(replay, panel));
+      drawReplay(panel.querySelector("canvas"), replay, state.time, cellSize(replay, panel), state.selected);
       const c = countsAt(replay, state.time);
       panel.querySelector(".counts").textContent = `${c.finished}/${replay.robots.length} robots done · ` +
         `${count(c.delays, "delay step")} · ${count(c.collisions, "collision")}`;
+      panel.querySelector(".robot").textContent = state.selected === null ? "Click a robot to follow it." :
+        describeRobot(replay, state.selected, state.time);
     });
   }
 
   function show(replays) {
     state.replays = replays;
     state.time = 0;
+    state.selected = null;
     panels.replaceChildren(...replays.map((replay) => {
       const panel = document.createElement("figure");
       const title = document.createElement("figcaption");
@@ -302,7 +382,16 @@ function startPage() {
       title.lastChild.textContent = ` — ${replay.robots.length} robots, ${result}`;
       const counts = document.createElement("div");
       counts.className = "counts";
-      panel.append(title, document.createElement("canvas"), counts);
+      const robot = document.createElement("div");
+      robot.className = "robot";
+      const canvas = document.createElement("canvas");
+      // A click selects the robot under it (the same robot in every run), or clears the selection.
+      canvas.addEventListener("click", (e) => {
+        const cell = canvas.getBoundingClientRect().width / replay.map.width;
+        state.selected = robotAt(replay, state.time, e.offsetX / cell, e.offsetY / cell);
+        render();
+      });
+      panel.append(title, canvas, counts, robot);
       return panel;
     }));
     // Maps much wider than tall get the page's full width each, one above the other.
@@ -368,12 +457,11 @@ function startPage() {
   if (embedded && embedded.textContent.trim()) {
     try {
       show(asReplays(JSON.parse(embedded.textContent)));
-      // A link can open the page at a moment: page.html#t=18.
-      const start = timeFromHash(location.hash);
-      if (start !== null) {
-        state.time = Math.min(start, end());
-        render();
-      }
+      // A link can open the page at a moment, with a robot selected: page.html#t=18&robot=6.
+      const asked = parseHash(location.hash);
+      if (asked.time !== null) state.time = Math.min(asked.time, end());
+      if (asked.robot !== null && state.replays.every((r) => asked.robot < r.robots.length)) state.selected = asked.robot;
+      render();
     } catch (err) {
       $("error").textContent = `The embedded replay can't be shown: ${err.message}`;
     }
@@ -389,5 +477,5 @@ if (typeof document !== "undefined") {
 
 if (typeof module !== "undefined") {
   module.exports = { positionsAt, plannedAt, delayedAt, collisionsAt, countsAt, robotHue, shapeProblems, asReplays,
-                     stepOf, label, count, timeFromHash };
+                     stepOf, label, count, parseHash, arrival, robotAt, robotSummary, describeRobot };
 }

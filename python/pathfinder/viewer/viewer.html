@@ -32,6 +32,8 @@
   figcaption { margin-bottom: 8px; }
   figcaption span, .counts { color: var(--muted); }
   .counts { margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .robot { margin-top: 2px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  canvas { cursor: pointer; }
   canvas { display: block; max-width: 100%; }
   .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 14px; color: var(--muted); }
   .legend i { display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px;
@@ -63,7 +65,8 @@ colour; the dashed ring is where the plan has it at this moment, so the gap is h
 <div class="legend">
   <span><i style="background: var(--delay)"></i>delayed this step (holds its cell)</span>
   <span><i style="background: var(--collision)"></i>collision (two robots in one cell, or swapping)</span>
-  <span>Space: play/pause · ←/→: one step</span>
+  <span>Click a robot: its plan (dashed) and its path so far</span>
+  <span>Space: play/pause · ←/→: one step · link to a moment: #t=18&amp;robot=6</span>
 </div>
 <script id="replays" type="application/json">/*REPLAYS*/</script>
 <script>/*PLAYER*/</script>

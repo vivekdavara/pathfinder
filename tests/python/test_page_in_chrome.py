@@ -147,3 +147,57 @@ def test_a_broken_embedded_replay_is_reported(runs, tmp_path):
     path.write_text(text)
     dom = dump_dom(path, tmp_path)
     assert "can't be shown" in text_of(dom, "error") and "replay 1" in text_of(dom, "error")
+
+
+def robot_lines(dom):
+    return re.findall(r'class="robot">([^<]*)<', dom)
+
+
+def test_a_link_can_select_a_robot(runs, tmp_path):
+    # Robot 6 drives into robot 9 at t = 3 in the timetable run (robot 9 was held in the first step); ordered, it waits.
+    timetable_run = runs[0]
+    assert {"kind": "vertex", "a": 6, "b": 9, "time": 3, "cell": timetable_run["collisions"][0]["cell"],
+            "to": None} == timetable_run["collisions"][0]
+    dom = dump_dom(page_for(runs, tmp_path, probe=False), tmp_path, "#t=5&robot=6")
+    timetable, ordered = robot_lines(dom)
+    w = timetable_run["map"]["width"]
+    start, goal = timetable_run["robots"][6]["start"], timetable_run["robots"][6]["goal"]
+    planned = pf.path_cost(timetable_run["plan"][6], goal)
+    head = f"Robot 6: ({start % w}, {start // w}) → ({goal % w}, {goal // w}), planned cost {planned}"
+    assert timetable.startswith(head + " · ") and timetable.endswith("collided with 9 at t = 3")
+    assert ordered.startswith(head + " · ") and ordered.endswith("no collisions")
+
+
+@pytest.mark.parametrize("fragment", ["", "#robot=99", "#robot=x"])
+def test_without_a_selection_the_page_says_how_to_make_one(runs, tmp_path, fragment):
+    dom = dump_dom(page_for(runs, tmp_path, probe=False), tmp_path, fragment)
+    assert robot_lines(dom) == ["Click a robot to follow it."] * 2
+
+
+# Clicks the first canvas on robot 6 at time 0, then on a wall cell, and records the robot lines after each.
+CLICKS = """<pre id="clicks"></pre><script>
+window.addEventListener("load", () => {
+  const replay = JSON.parse(document.getElementById("replays").textContent)[0];
+  const canvas = document.querySelector("canvas");
+  const rect = canvas.getBoundingClientRect();
+  const cell = rect.width / replay.map.width;
+  const click = (x, y) => canvas.dispatchEvent(new MouseEvent("click", {
+    clientX: rect.left + x * cell, clientY: rect.top + y * cell, bubbles: true }));
+  const lines = () => Array.from(document.querySelectorAll(".robot"), (e) => e.textContent);
+  const [x, y] = positionsAt(replay, 0)[6];
+  click(x + 0.5, y + 0.5);
+  const selected = lines();
+  const wall = replay.map.rows.join("").indexOf("@");
+  click(wall % replay.map.width + 0.5, Math.floor(wall / replay.map.width) + 0.5);
+  document.getElementById("clicks").textContent = JSON.stringify({ selected, cleared: lines() });
+});
+</script>"""
+
+
+def test_clicking_a_robot_selects_it_in_every_run_and_clicking_the_floor_clears_it(runs, tmp_path):
+    path = tmp_path / "clicks.html"
+    path.write_text(html(runs).replace("</body>", CLICKS + "\n</body>"))
+    dom = dump_dom(path, tmp_path)
+    clicks = json.loads(text_of(dom, "clicks").replace("&quot;", '"'))
+    assert [line.split(":")[0] for line in clicks["selected"]] == ["Robot 6", "Robot 6"]
+    assert clicks["cleared"] == ["Click a robot to follow it."] * 2

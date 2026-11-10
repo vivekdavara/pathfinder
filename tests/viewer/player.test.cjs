@@ -172,13 +172,52 @@ test("a file holds one replay or a list", () => {
   assert.throws(() => player.asReplays([corridor(), { format: "x" }]), /replay 2/);
 });
 
-test("a link's moment", () => {
-  assert.equal(player.timeFromHash("#t=18"), 18);
-  assert.equal(player.timeFromHash("#t=2.5"), 2.5);
-  assert.equal(player.timeFromHash("#t=0"), 0);
-  for (const bad of ["", "#", "#t=", "#t=-1", "#t=abc", "#t=1e3", "#t=3&x=1", "#x=3", null, undefined]) {
-    assert.equal(player.timeFromHash(bad), null, String(bad));
+test("what a link asks for", () => {
+  assert.deepEqual(player.parseHash("#t=18"), { time: 18, robot: null });
+  assert.deepEqual(player.parseHash("#t=2.5"), { time: 2.5, robot: null });
+  assert.deepEqual(player.parseHash("#t=0&robot=6"), { time: 0, robot: 6 });
+  assert.deepEqual(player.parseHash("#robot=6&t=3"), { time: 3, robot: 6 });
+  assert.deepEqual(player.parseHash("#robot=0"), { time: null, robot: 0 });
+  const none = { time: null, robot: null };
+  for (const bad of ["", "#", "#t=", "#t=-1", "#t=abc", "#t=1e3", "#t=3&x=1", "#x=3", "#t=1&t=2", "#robot=-1",
+                     "#robot=1.5", "#t=1&", "#&t=1", null, undefined]) {
+    assert.deepEqual(player.parseHash(bad), none, String(bad));
   }
+});
+
+test("arrival: when a path is on its goal for good", () => {
+  assert.equal(player.arrival([0, 1, 2, 3], 3), 3);
+  assert.equal(player.arrival([0, 1, 3, 3, 3], 3), 2);
+  assert.equal(player.arrival([3, 2, 3], 3), 2); // left its goal and came back
+  assert.equal(player.arrival([3], 3), 0);
+  assert.equal(player.arrival([0, 1], 3), null);
+});
+
+test("the robot under a point", () => {
+  const r = corridor(); // at time 0, robot 0 is in cell (0, 0) and robot 1 in (1, 0)
+  assert.equal(player.robotAt(r, 0, 0.5, 0.5), 0);
+  assert.equal(player.robotAt(r, 0, 1.5, 0.5), 1);
+  assert.equal(player.robotAt(r, 0, 1.5 + 0.38, 0.5), 1); // on the disc's edge
+  assert.equal(player.robotAt(r, 0, 1.5 + 0.39, 0.5), null);
+  assert.equal(player.robotAt(r, 0, 3.5, 0.5), null);
+  // At 1.25 both robots are at x = 1.25 (robot 0 drove into robot 1): the one on top, the higher number, is chosen.
+  assert.equal(player.robotAt(r, 1.25, 1.75, 0.5), 1);
+});
+
+test("a robot's summary by a moment", () => {
+  const r = corridor();
+  assert.deepEqual(player.robotSummary(r, 1, 0), { start: [1, 0], goal: [4, 0], planned: 3, arrived: null, delays: 1,
+                                                  collisions: [] });
+  assert.deepEqual(player.robotSummary(r, 0, 2).collisions, [{ other: 1, time: 1, kind: "vertex" },
+                                                             { other: 1, time: 2, kind: "vertex" }]);
+  assert.equal(player.robotSummary(r, 0, 3).arrived, 3);
+  assert.equal(player.robotSummary(r, 1, 3).arrived, null);
+  assert.equal(player.robotSummary(r, 1, 4).arrived, 4);
+  assert.equal(player.describeRobot(r, 0, 4),
+               "Robot 0: (0, 0) → (3, 0), planned cost 3, arrived at 3 · 0 delay steps · collided with 1 at t = 1, " +
+               "1 at t = 2, 1 at t = 3");
+  assert.equal(player.describeRobot(r, 1, 0), "Robot 1: (1, 0) → (4, 0), planned cost 3 · 1 delay step · no collisions");
+  assert.match(player.describeRobot(swap(), 0, 0), /collided with 1 at t = 0 \(swap\)/);
 });
 
 test("labels", () => {
