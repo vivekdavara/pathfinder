@@ -2,7 +2,8 @@
 
 The questions an interviewer is likely to ask about this project, with short answers that point at the code. Day 1
 covers the model, the formats, the generators and the validator; day 2 the single-agent search and the baseline
-planner; day 3 conflict-based search; day 4 the simulator and the benchmarks; day 5 adds the visualizer.
+planner; day 3 conflict-based search; day 4 the simulator and the benchmarks; day 5 the replay viewer and the
+release.
 
 ## In two minutes
 
@@ -21,7 +22,10 @@ search, now fixed. Day 4 measured the trade properly (1,550 tries on four benchm
 nearly everything to 100 agents in milliseconds, CBS falls from 24 or 25 of 25 at 10 agents to none by 30 to 80, and
 where both solve prioritized planning costs 0.5% to 12% more on average) and built a simulator that runs plans with
 robots delayed. Run as timetables, plans collide after a handful of delays; run in each plan's order of visits to
-every cell, they can't collide or deadlock, and each step of delay costs the fleet 1.01 to 1.21 steps.
+every cell, they can't collide or deadlock, and each step of delay costs the fleet 1.01 to 1.21 steps. Day 5 made
+that visible: any run can be recorded as a replay (JSON, checked by running the simulator again on it), played in a
+self-contained page with several runs side by side on one timeline, or rendered as a GIF; the README opens with one
+CBS plan run both ways under the same delays (6 collisions as a timetable, none ordered, for 5 more steps of cost).
 
 ## The model
 
@@ -400,7 +404,68 @@ It isn't a hot path (a few thousand robot-steps per run), it sits next to the ex
 that matter (validate, the scanner) are the library's, called through the bindings. Keeping it small and readable
 matters more than speed here.
 
+## The replay viewer (day 5)
+
+**What does the viewer show, and why build it?**
+One plan executed with robots delayed, step by step: each robot moving between cell centres, its goal as a square in
+its colour, a dashed ring where the plan has it at that moment (so the gap is how far behind it is), an amber ring
+when it is delayed in this step, a red ring when two robots share a cell and a red bar when they swap. The numbers of
+day 4 say that a timetable collides and the ordered policy waits; the page shows *where* and *why*: in the README's
+example the timetable's first collision is at t = 3: robot 9 was held in the first step, so it reaches the crossing
+cell (13, 4) a step late, just as robot 6 enters it on schedule; in the ordered run robot 6 waits one more step at
+(13, 5) and goes in after robot 9 has left. Several runs share one timeline, so
+the same plan under the same delays can be watched both ways at once.
+
+**What is a replay, and how do you know one is right?**
+A JSON document (`python/pathfinder/replay.py`): the map, the robots, the plan, every robot's cell at every step,
+who was delayed in each step, the collisions and the run's summary. `record()` runs the simulator with an `on_step`
+callback and writes down what it did. The check is the part I'd point at: the simulator is deterministic given the
+plan and each step's delays, so `check()` doesn't re-implement the rules; it rebuilds the instance, validates the
+plan, re-runs the simulator with the recorded delays and requires every position, collision and summary field to come
+out identical, with the same JSON types. A hand-edited file where a robot jumps, a delayed robot moves, a collision
+is dropped or a cost is changed fails; `test_replay.py` has one test per kind of edit.
+
+**Why a static HTML file instead of a web app?**
+Nothing needs a server: a replay is tens to hundreds of KiB and everything on screen is arithmetic on it. So
+`html()` inlines `player.js` and the replays' JSON into one file that opens from a download, fetches nothing and has
+no build step; the GIF exists because GitHub's README shows images but runs no scripts.
+
+**The page is JavaScript and the GIF is Python. How do they stay consistent?**
+Both compute the same six things at a moment of the run (positions, the plan's ghosts, who is delayed, which
+collisions show, the counts, the colours), and a test runs `player.js` under Node on a real run with delays and a
+collision and compares every value with the Python functions at whole and fractional times, around each collision's
+window, before the start and after the end (`test_the_page_and_python_agree_on_every_moment`). Two copies of a rule
+are a bug waiting to happen; a test that compares them is how I'd live with needing both.
+
+**How is the JSON put into the page safely?**
+In a `<script type="application/json">` element, with `<`, `>` and `&` written as `\u003c`-style escapes. Those
+characters can only occur inside JSON strings, where the escapes mean the same thing, so a title containing
+`</script>` or `<!--` can't end or change the element as far as the HTML parser is concerned; a test puts exactly
+that in a title and a map name. The template is split at its placeholders before anything is inserted, so a title
+containing a placeholder's text isn't replaced either.
+
+**Why does the timetable run have the lower sum of costs in the README's example?**
+260 against the ordered run's 265, because nothing stops a timetable robot that drives into another: it keeps its
+schedule through the collision. That cost isn't achievable by real robots; the ordered run's 265 is what the same
+delays cost when nobody collides.
+
+**How did you test something visual?**
+In layers. The pure functions are tested in Node (15 tests) and against Python. The GIF's pixels are checked where
+the replay says things are: every robot's centre pixel in its palette colour at several moments of both runs, an
+amber ring around each delayed robot, red only in the run that has collisions, and a real timetable swap (found by
+searching seeds) drawn as a red bar along the whole edge. The page was opened in a browser to check for console
+errors, the collision ring at its time, the controls (Space pausing once with the Play button focused was a bug I
+found that way) and the cell sizes.
+
 ## The review
+
+**How was day 5 reviewed?**
+By me, not an agent: the run started five hours late, at the same time as the other project's session, and two
+sessions plus agents had hit the account's usage limit before. Three passes, each finding something: reading the
+code over (four edge cases in the script and the page), a mutation check of 38 mutants (two test gaps, and a special
+case in both languages that did nothing: a collision at the run's last moment already falls in its window), and
+coverage (no test had a valid instance with an invalid plan). And a false claim of mine in a test comment, that
+simulator runs never contain a swap: timetable runs do, and the test now draws a real one.
 
 **How was day 1 reviewed?**
 By an agent in its own git worktree, asked for correctness bugs and to prove each with a failing test before
@@ -507,8 +572,18 @@ library as `pathfinder._core` with C++ exceptions mapped to Python ones (`ParseE
 
 ## What's next
 
-Day 5: a replay visualizer (the simulator's trajectories drawn step by step, delays and all), the final results and
-v1.0.0. Candidate refinements, each to be measured against what's here rather than assumed to help: cardinal
-conflicts first in CBS (the sweep's failures are symmetric conflicts on maps where the optimum is the lower bound),
-and letting the ordered execution swap two robots' order at a cell when the one ahead is delayed (a switchable
-dependency graph).
+**What would you do next?**
+In order, each measured against what's here rather than assumed to help:
+1. Cardinal conflicts first in CBS (split on a conflict where both children cost more), then bypassing: the sweep's
+   CBS failures are symmetric conflicts on maps where the optimum is the lower bound, which is exactly what those
+   address.
+2. A switchable dependency graph for the ordered execution: let two robots trade places in a cell's queue when the one
+   ahead is delayed, if that costs less; today one long delay holds up everyone queued behind it.
+3. Replanning in the loop for long delays, compared with the ordered policy on the same delay draws (the replay
+   viewer can already show both runs side by side).
+4. Zoom and pan in the viewer, for maps where a cell is a few pixels.
+
+**What did v1.0.0 leave out on purpose?**
+The CBS refinements above: the point of the benchmarks was to measure plain CBS against prioritized planning, and an
+improved CBS needs its own sweep and review, not a change on release day. The viewer stayed a static page for the
+reasons above.
