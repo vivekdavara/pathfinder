@@ -1,0 +1,5 @@
+generated-warehouse (synthetic), scenario seed 1: 16 robots, cbs plan SOC 232, makespan 29
+  timetable: SOC 260 (+28), makespan 31, 28 robot-steps of delay, 6 collisions; recorded and checked in 1.2 ms (the check alone: 0.6 ms)
+  ordered  : SOC 265 (+33), makespan 31, 28 robot-steps of delay, 0 collisions; recorded and checked in 1.4 ms (the check alone: 0.7 ms)
+wrote results/day5/warehouse-16.html (27.5 KiB)
+wrote results/day5/warehouse-16.gif (125 frames, 754.7 KiB, in 0.21 s)

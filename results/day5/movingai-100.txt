@@ -1,0 +1,10 @@
+empty-32-32, random scenario 1: 100 robots, pp plan SOC 2361, makespan 48
+  timetable: SOC 2500 (+139), makespan 53, 139 robot-steps of delay, 77 collisions; recorded and checked in 8.4 ms (the check alone: 4.9 ms)
+  ordered  : SOC 2609 (+248), makespan 53, 146 robot-steps of delay, 0 collisions; recorded and checked in 10.7 ms (the check alone: 5.7 ms)
+wrote .scratch/d5/empty-32-32.html (94.5 KiB)
+wrote .scratch/d5/empty-32-32.gif (107 frames, 813.8 KiB, in 0.20 s)
+warehouse-10-20-10-2-1, random scenario 1: 100 robots, pp plan SOC 9500, makespan 198
+  timetable: SOC 10035 (+535), makespan 206, 535 robot-steps of delay, 132 collisions; recorded and checked in 31.6 ms (the check alone: 17.3 ms)
+  ordered  : SOC 10147 (+647), makespan 206, 541 robot-steps of delay, 0 collisions; recorded and checked in 41.4 ms (the check alone: 23.5 ms)
+wrote .scratch/d5/warehouse-10-20-10-2-1.html (350.1 KiB)
+wrote .scratch/d5/warehouse-10-20-10-2-1.gif (413 frames, 7664.9 KiB, in 2.23 s)

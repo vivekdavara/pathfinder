@@ -26,6 +26,7 @@
                    background: var(--panel); color: var(--text); cursor: pointer; }
   #clock { font-variant-numeric: tabular-nums; min-width: 9ch; }
   #panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 16px; }
+  #panels.stacked { grid-template-columns: 1fr; }
   figure { margin: 0; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
            overflow: hidden; }
   figcaption { margin-bottom: 8px; }

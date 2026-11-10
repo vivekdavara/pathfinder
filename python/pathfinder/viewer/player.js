@@ -251,6 +251,9 @@ function drawReplay(canvas, replay, time, cellSize) {
   }
 }
 
+const PANEL_PADDING = 12; // viewer.html's figure padding
+const WIDE = 1.6;
+
 function startPage() {
   const state = { replays: [], time: 0, playing: false, speed: 2, last: null };
   const $ = (id) => document.getElementById(id);
@@ -260,11 +263,12 @@ function startPage() {
 
   const end = () => Math.max(...state.replays.map(steps));
 
-  function cellSize(replay) {
-    const columns = Math.min(state.replays.length, window.innerWidth >= 900 ? 2 : 1);
-    const width = (panels.clientWidth - 16 * (columns - 1)) / columns;
+  // Cells as large as the panel's width allows (its padding taken off), with the map at most 62% of the window's
+  // height, between 2 and 36 pixels.
+  function cellSize(replay, panel) {
+    const width = panel.clientWidth - 2 * PANEL_PADDING;
     const height = window.innerHeight * 0.62;
-    return Math.max(3, Math.min(36, Math.floor(Math.min(width / replay.map.width, height / replay.map.height))));
+    return Math.max(2, Math.min(36, Math.floor(Math.min(width / replay.map.width, height / replay.map.height))));
   }
 
   function render() {
@@ -272,7 +276,7 @@ function startPage() {
     $("clock").textContent = `t = ${state.time.toFixed(1)} / ${end()}`;
     state.replays.forEach((replay, k) => {
       const panel = panels.children[k];
-      drawReplay(panel.querySelector("canvas"), replay, state.time, cellSize(replay));
+      drawReplay(panel.querySelector("canvas"), replay, state.time, cellSize(replay, panel));
       const c = countsAt(replay, state.time);
       panel.querySelector(".counts").textContent = `${c.finished}/${replay.robots.length} robots done · ` +
         `${count(c.delays, "delay step")} · ${count(c.collisions, "collision")}`;
@@ -296,6 +300,8 @@ function startPage() {
       panel.append(title, document.createElement("canvas"), counts);
       return panel;
     }));
+    // Maps much wider than tall get the page's full width each, one above the other.
+    panels.classList.toggle("stacked", replays.every((r) => r.map.width >= WIDE * r.map.height));
     slider.max = String(end());
     document.title = replays[0].title || "Pathfinder replay";
     $("heading").textContent = replays[0].title || "Pathfinder replay";

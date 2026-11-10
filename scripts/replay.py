@@ -15,10 +15,11 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from pathlib import Path
 
 import pathfinder as pf
-from pathfinder.replay import record, save, write_html
+from pathfinder.replay import check, record, save, write_html
 from pathfinder.simulator import POLICIES, delay_robot, random_delays
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -61,6 +62,10 @@ def time_limit(text: str) -> float:
     if not 0 < value < float("inf"):
         raise argparse.ArgumentTypeError("must be a positive number of seconds")
     return value
+
+
+def kib(path: Path) -> str:
+    return f"{path.stat().st_size / 1024:.1f} KiB"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -111,27 +116,34 @@ def main(argv: list[str] | None = None) -> int:
     for policy in args.policies:
         schedule = (delay_robot(args.delay_robot, args.at, args.steps) if args.delay_robot is not None
                     else random_delays(args.delay_probability, args.seed))
+        start = time.perf_counter()
         replay = record(instance, result.plan, policy, schedule, planner=args.planner,
                         title=f"{args.agents} robots, {how}", map_name=where)
+        recorded = time.perf_counter() - start
+        start = time.perf_counter()
+        check(replay)  # record() checks too; timed again on its own
+        checked = time.perf_counter() - start
         s = replay["summary"]
         outcome = (f"SOC {s['sum_of_costs']} (+{s['sum_of_costs'] - s['planned_sum_of_costs']}), makespan "
                    f"{s['makespan']}" if s["completed"] else f"stopped after {s['steps']} steps")
-        print(f"  {policy:9}: {outcome}, {s['delay_steps']} robot-steps of delay, {s['collisions']} collisions")
+        print(f"  {policy:9}: {outcome}, {s['delay_steps']} robot-steps of delay, {s['collisions']} collisions; "
+              f"recorded and checked in {recorded * 1000:.1f} ms (the check alone: {checked * 1000:.1f} ms)")
         replays.append(replay)
 
     if args.json:
         for replay in replays:
             path = args.json.with_name(f"{args.json.name}-{replay['policy']}.json")
             save(replay, path)
-            print(f"wrote {path}")
+            print(f"wrote {path} ({kib(path)})")
     if args.html:
         write_html(replays, args.html)
-        print(f"wrote {args.html}")
+        print(f"wrote {args.html} ({kib(args.html)})")
     if args.gif:
         from pathfinder.render import save_gif  # Pillow only when a GIF is asked for
 
+        start = time.perf_counter()
         frames = save_gif(replays, args.gif, cell=args.gif_cell, substeps=args.gif_substeps)
-        print(f"wrote {args.gif} ({frames} frames)")
+        print(f"wrote {args.gif} ({frames} frames, {kib(args.gif)}, in {time.perf_counter() - start:.2f} s)")
     return 0
 
 
