@@ -189,8 +189,9 @@ The day-4 experiments (both need `make maps release` first, and `PYTHONPATH=buil
 ```
 
 The replay viewer (day 5): plan one instance, execute the plan with both policies under the same delays, and write
-the runs as one page (open it in any browser: play, pause, step, scrub; or open another replay JSON file; add
-`#t=18` to the page's address to open it at that moment), as replay JSON files, and as a GIF:
+the runs as one page (open it in any browser: play, pause, step, scrub; click a robot to follow it: its plan, its
+path so far, its delays and collisions; or open another replay JSON file; `page.html#t=5&robot=6` opens it at a
+moment with a robot selected), as replay JSON files, and as a GIF:
 
 ```bash
 PYTHONPATH=build/release/python .venv/bin/python scripts/replay.py --agents 16 --scenario 1 \
@@ -238,7 +239,7 @@ The headline numbers, each from the day's section below, where its command, mach
 | ...and executed in the plan's order? | Never a collision or a deadlock; each robot-step of delay costs the fleet 1.014 to 1.050 robot-steps on that map, 1.094 to 1.205 on the denser random-32-32-20 | day 4 |
 | How fast is the simulator? | 1.13 to 1.22 million robot-steps a second ordered, 1.68 to 1.87 million as a timetable | day 4 |
 | What does a replay cost? | 16 robots, 31 steps: recorded and checked in 1.2 to 1.4 ms, a 27.5 KiB page for two runs; 100 robots, 206 steps: 31.6 to 41.4 ms, 350 KiB | day 5 |
-| Tests | 204 CTest tests: the GoogleTest suites and the CLI script, 166 pytest tests (`python.pytest`, the viewer page in headless Chrome among them), 16 Node tests (`viewer.node`), the examples and scripts end to end; green on GCC 14, Clang 18, Apple Clang and under ASan + UBSan in CI | day 5 |
+| Tests | 204 CTest tests: the GoogleTest suites and the CLI script, 171 pytest tests (`python.pytest`, the viewer page in headless Chrome among them), 19 Node tests (`viewer.node`), the examples and scripts end to end; green on GCC 14, Clang 18, Apple Clang and under ASan + UBSan in CI | day 5 |
 
 ## Results (day 5)
 
@@ -246,12 +247,13 @@ Measured on an Apple M3, macOS 26.6, Python 3.11.12, Pillow 13.0.0, Node 23.11.0
 session running alongside (load average about 3.4): the times are indications; sizes, counts and collisions don't
 depend on load. Every number comes from the command next to it.
 
-- **Tests**: 204 CTest tests (`ctest --preset dev -N`; 202 on day 4): new are `viewer.node` (16 Node tests of
+- **Tests**: 204 CTest tests (`ctest --preset dev -N`; 202 on day 4): new are `viewer.node` (19 Node tests of
   `player.js`'s pure functions: positions, the plan's ghosts, delays, the collision windows, counts, colours, the
-  shape check, `#t=` links) and `python.replay` (the script end to end, writing the page, the JSON and a GIF);
-  `python.pytest` holds 166 pytest tests (97 on day 4): `test_page_in_chrome.py` 6 (the page loaded in headless
-  Chrome: the clock, each run's counts and the error line as the script left them, and a probe reading the canvas
-  at every robot's position and inside a collision's ring; three hand mutations of the drawing code each fail it),
+  shape check, links, the robot under a point, a robot's summary) and `python.replay` (the script end to end, writing the page, the JSON and a GIF);
+  `python.pytest` holds 171 pytest tests (97 on day 4): `test_page_in_chrome.py` 11 (the page loaded in headless
+  Chrome: the clock, each run's counts, robot lines and error line as the script left them; a probe reading the
+  canvas at every robot's position and inside a collision's ring; links to a moment and a robot; click events on the
+  canvas selecting a robot and clearing it; three hand mutations of the drawing code each fail it),
   `test_replay.py` 36 (the record is the simulator's run; every kind of edit
   `check()` must refuse; strict JSON; the page's embedding; Node against Python on every moment of a real run),
   `test_render.py` 9 (each robot's centre pixel in its colour, the amber ring, red only in the run with collisions,
@@ -266,7 +268,10 @@ depend on load. Every number comes from the command next to it.
   robot that starts on its goal counted done a step late), 3 were code that did nothing (a special case for a
   collision at the run's last moment, in both languages, which the window already covered; a second check of
   `summary.completed`), removed in `badd88e`, and 1 is equivalent (which step the end of a run falls in, where a
-  guard gives the same positions). After: 36 of 37 killed.
+  guard gives the same positions). After: 36 of 37 killed. Ten more mutants for the robot following added later
+  (with the Chrome tests in the run) left two alive, each now a test (`7100624`): a robot's collisions named the
+  wrong partner when it was the second robot of a pair, and a link to a robot the runs don't have was only reported
+  on the error line, which no test read. Final: 46 of 47 killed, the equivalent one left.
 - **Replays** (`scripts/replay.py`; [`results/day5/`](results/day5/README.md) has the commands and outputs): the
   README's two 16-robot runs (31 steps) recorded and checked in 1.2 and 1.4 ms (a check alone 0.6 and 0.7 ms); their
   page 27.5 KiB, their GIF 125 frames, 754.7 KiB, written in 0.21 s. On MovingAI maps with 100 robots (prioritized
@@ -863,7 +868,8 @@ passes, each finding something:
 - **Reading it over** (`9d5912a`): `scripts/replay.py` ignored `--at` and `--steps` without `--delay-robot`, sent
   `--gif-cell 3` through to a traceback, and printed a traceback for a map it couldn't open; the page toggled play
   twice on Space with the Play button focused. Each has a test (the key in a browser).
-- **Mutations** (`badd88e`): two test gaps and dead code in both languages, above.
+- **Mutations** (`badd88e`, then `7100624` for the robot following): four test gaps in all, and dead code in both
+  languages, above.
 - **Coverage** (`599d230`): no test had a valid instance with an invalid plan (each earlier plan edit broke the
   instance first), and five refusals had no test.
 - And one claim of mine, caught before it was committed: a test comment said simulator runs never contain a swap.

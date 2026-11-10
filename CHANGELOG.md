@@ -33,7 +33,8 @@ the code implements, [WALKTHROUGH.md](WALKTHROUGH.md) the questions it should be
   collisions) or in the plan's order of visits to each cell (the action dependency graph: no collision, no
   deadlock, no cost for an undelayed plan) (day 4).
 - `pathfinder.replay`: a run recorded as JSON and checked by running the simulator again on it; `html()` writes a
-  self-contained page that plays runs side by side on one timeline (`#t=` links to a moment) (day 5).
+  self-contained page that plays runs side by side on one timeline, where a click follows a robot (its plan, its
+  path so far, its delays and collisions) and `#t=5&robot=6` links to a moment and a robot (day 5).
 - `pathfinder.render`: the same drawing as an animated GIF (Pillow) (day 5).
 
 ### Experiments
@@ -47,8 +48,8 @@ the code implements, [WALKTHROUGH.md](WALKTHROUGH.md) the questions it should be
 ### Quality
 
 - 204 CTest tests: the GoogleTest suites (brute-force oracles for space-time A\* and for CBS's optimum, randomly
-  damaged files for the parsers), the CLI script, 166 pytest tests, 16 Node tests of the viewer's script, the page in
-  headless Chrome, the examples and scripts end to end.
+  damaged files for the parsers), the CLI script, 171 pytest tests (the page in headless Chrome among them, clicks
+  included), 19 Node tests of the viewer's script, the examples and scripts end to end.
 - CI on every push: GCC 14 and Clang 18 on Ubuntu, Apple Clang on macOS (Debug with warnings as errors, Release, a
   benchmark smoke test), and the C++ tests under ASan and UBSan.
 - A review each day: an agent in its own worktree on days 1 to 4 (its findings kept as tests in `tests/review*/` and

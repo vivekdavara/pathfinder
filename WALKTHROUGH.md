@@ -414,7 +414,9 @@ day 4 say that a timetable collides and the ordered policy waits; the page shows
 example the timetable's first collision is at t = 3: robot 9 was held in the first step, so it reaches the crossing
 cell (13, 4) a step late, just as robot 6 enters it on schedule; in the ordered run robot 6 waits one more step at
 (13, 5) and goes in after robot 9 has left. Several runs share one timeline, so
-the same plan under the same delays can be watched both ways at once.
+the same plan under the same delays can be watched both ways at once. Clicking robot 6 (or opening
+`warehouse-16.html#t=5&robot=6`) draws its plan and the path it has driven in both runs, with a line per run: in the
+timetable, "collided with 9 at t = 3"; ordered, "no collisions".
 
 **What is a replay, and how do you know one is right?**
 A JSON document (`python/pathfinder/replay.py`): the map, the robots, the plan, every robot's cell at every step,
@@ -465,8 +467,9 @@ Play button focused was a bug I found that way).
 By me, not an agent: the run started five hours late, at the same time as the other project's session, and two
 sessions plus agents had hit the account's usage limit before. Three passes, each finding something: reading the
 code over (four edge cases in the script and the page), a mutation check of 38 mutants (two test gaps, and a special
-case in both languages that did nothing: a collision at the run's last moment already falls in its window), and
-coverage (no test had a valid instance with an invalid plan). And a false claim of mine in a test comment, that
+case in both languages that did nothing: a collision at the run's last moment already falls in its window) and 10
+more for the robot following (two more gaps: a robot second in a collision named the wrong partner in a mutant no
+test saw), and coverage (no test had a valid instance with an invalid plan). And a false claim of mine in a test comment, that
 simulator runs never contain a swap: timetable runs do, and the test now draws a real one.
 
 **How was day 1 reviewed?**

@@ -352,7 +352,8 @@ collision under the timetable and into a wait under the ordered policy. Three pi
 - **The page** (`python/pathfinder/viewer/viewer.html` and `player.js`): `pathfinder.replay.html()` inlines the script
   and the replays' JSON into one file that opens in any browser, with no server and nothing fetched. Several runs
   play side by side on one timeline (play, pause, step, scrub, speed, keyboard), or one is opened from a JSON file;
-  `page.html#t=18` opens it at that moment.
+  a click on a robot follows it in every run (below); `page.html#t=18&robot=6` opens it at that moment with that
+  robot followed.
 - **The GIF** (`python/pathfinder/render.py`, Pillow): the same drawing in palette mode, for the README, where GitHub
   shows images but runs no script.
 
@@ -363,7 +364,9 @@ path), so the gap between a robot and its ring is how far behind the delays have
 ⌊τ⌋ gets an amber ring (and a pause sign on the page). A vertex collision at time T shows as a red ring on its cell
 from T − 0.5 to T + 0.5; a swap as a red bar across the edge during its
 step. The counts under each run: robot-steps of delay in the steps begun, collisions reached, robots on their goals
-for good. Colours: hue `137.508 · i mod 360` (the golden angle), so neighbouring robot numbers differ.
+for good. A followed robot (clicked, the topmost disc under the pointer, or named in the link) has its planned path
+drawn dashed and the path it has driven so far solid, a ring, and a line per run: start, goal, planned cost, when it
+arrived, its delay steps and its collisions so far, with whom. Colours: hue `137.508 · i mod 360` (the golden angle), so neighbouring robot numbers differ.
 
 **One set of rules in two languages.** The page computes all of this in JavaScript and the GIF in Python. Rather than
 trust that two copies agree, `positions_at`, `planned_at`, `delayed_at`, `collisions_at`, `counts_at` and
