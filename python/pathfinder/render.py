@@ -155,7 +155,9 @@ def frames(replays: Sequence[dict[str, Any]], cell: int = 14, substeps: int = 4)
 def save_gif(replays: Sequence[dict[str, Any]], path: str | Path, cell: int = 14, substeps: int = 4,
              steps_per_second: float = 4.0, hold: float = 2.0) -> int:
     """Writes the frames as a looping GIF: ``steps_per_second`` time steps a second, the last frame held ``hold``
-    seconds. Returns the number of frames."""
+    seconds. Returns the number of frames drawn. (Pillow merges a frame identical to the one before into it, adding
+    its time, so the file can hold fewer; the clock in each frame's header changes every frame unless more than ten
+    frames share a tenth of a step.)"""
     if not steps_per_second > 0 or not hold >= 0:
         raise ValueError("steps_per_second must be positive and hold 0 or more")
     images = frames(replays, cell, substeps)

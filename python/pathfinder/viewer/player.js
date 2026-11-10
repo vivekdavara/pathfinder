@@ -340,7 +340,10 @@ function startPage() {
   slider.addEventListener("input", () => { setPlaying(false); state.time = Number(slider.value); render(); });
   window.addEventListener("resize", render);
   document.addEventListener("keydown", (e) => {
+    // Keys typed into the slider, the speed menu or the file chooser are theirs; Space on a focused button is that
+    // button's click (handling it here too would toggle twice).
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
+    if (e.key === " " && e.target instanceof HTMLButtonElement) return;
     if (e.key === " ") { e.preventDefault(); setPlaying(!state.playing); }
     if (e.key === "ArrowLeft") stepBy(-1);
     if (e.key === "ArrowRight") stepBy(1);

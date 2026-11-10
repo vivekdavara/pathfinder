@@ -8,7 +8,8 @@ optionally replay JSON files and an animated GIF): DESIGN.md "The replay viewer 
 downloads); any other name is a MovingAI benchmark map from `make maps` (data/mapf-map/<name>.map with scenario
 data/scen-random/<name>-random-<n>.scen). Both policies (or the ones given) execute the same plan under the same
 delays: random_delays draws for every robot at every step, so with one seed both runs see the same delays at the same
-steps. Prints one line per run. Exits 1 if the planner doesn't solve the instance.
+steps. Prints one line per run. Exits 1 if the planner doesn't solve the instance, 2 on a usage error or a map or
+scenario that can't be loaded.
 """
 
 from __future__ import annotations
@@ -50,6 +51,13 @@ def non_negative(text: str) -> int:
     return value
 
 
+def gif_cell(text: str) -> int:
+    value = int(text)
+    if value < 4:
+        raise argparse.ArgumentTypeError("must be 4 pixels or more")
+    return value
+
+
 def probability(text: str) -> float:
     value = float(text)
     if not 0 <= value <= 1:  # also refuses nan
@@ -81,13 +89,13 @@ def main(argv: list[str] | None = None) -> int:
                         help="each robot delayed at each step with this probability (default 0.05)")
     delays.add_argument("--delay-robot", type=non_negative, metavar="ROBOT",
                         help="instead: delay one robot, --at and --steps")
-    ap.add_argument("--at", type=non_negative, default=0, help="with --delay-robot: the first step delayed")
-    ap.add_argument("--steps", type=non_negative, default=1, help="with --delay-robot: how many steps")
+    ap.add_argument("--at", type=non_negative, help="with --delay-robot: the first step delayed (default 0)")
+    ap.add_argument("--steps", type=non_negative, help="with --delay-robot: how many steps (default 1)")
     ap.add_argument("--seed", type=int, default=1, help="the random delays' seed")
     ap.add_argument("--html", type=Path, help="write the replay page here")
     ap.add_argument("--json", type=Path, metavar="PREFIX", help="write each run to PREFIX-<policy>.json")
     ap.add_argument("--gif", type=Path, help="write an animated GIF of the runs side by side (needs Pillow)")
-    ap.add_argument("--gif-cell", type=positive, default=14, help="GIF pixels per cell")
+    ap.add_argument("--gif-cell", type=gif_cell, default=14, help="GIF pixels per cell (4 or more)")
     ap.add_argument("--gif-substeps", type=positive, default=4, help="GIF frames per time step")
     ap.add_argument("--data", type=Path, default=ROOT / "data")
     args = ap.parse_args(argv)
@@ -95,8 +103,16 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("a policy is given twice")
     if not (args.html or args.json or args.gif):
         ap.error("nothing to write: give --html, --json or --gif")
+    if args.delay_robot is None and (args.at is not None or args.steps is not None):
+        ap.error("--at and --steps go with --delay-robot")
+    args.at = 0 if args.at is None else args.at
+    args.steps = 1 if args.steps is None else args.steps
 
-    instance, where = load_instance(args.map, args.scenario, args.agents, args.data)
+    try:
+        instance, where = load_instance(args.map, args.scenario, args.agents, args.data)
+    except (RuntimeError, ValueError) as e:  # a file that can't be read (RuntimeError) or parsed, too few entries
+        print(f"can't load {args.map} scenario {args.scenario} with {args.agents} agents: {e}", file=sys.stderr)
+        return 2
     if args.delay_robot is not None and args.delay_robot >= len(instance.agents):
         ap.error(f"--delay-robot {args.delay_robot}: there are {len(instance.agents)} robots")
     if args.planner == "cbs":

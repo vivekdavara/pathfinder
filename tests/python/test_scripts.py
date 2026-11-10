@@ -1,7 +1,9 @@
-"""The experiment scripts' own arithmetic (scripts/sweep.py, scripts/delays.py), on cases worked out by hand. CTest
-also runs both scripts end to end on the generated floor (python.sweep, python.delays)."""
+"""The experiment scripts (scripts/sweep.py, scripts/delays.py, scripts/replay.py): their arithmetic on cases worked
+out by hand, and replay.py run in-process. CTest also runs all three end to end on the generated floor (python.sweep,
+python.delays, python.replay)."""
 
 import importlib.util
+import json
 import os
 from pathlib import Path
 
@@ -73,3 +75,78 @@ def test_sweep_refuses_no_time_limit_and_sorts_the_agent_counts(capsys):
     rows = [line.split("|")[1].strip() for line in capsys.readouterr().out.splitlines() if line[:3] in ("| 4", "| 8")]
     assert rows == ["4", "8"]
     assert sweep.soc_ratio(0, 0) == 1.0 and sweep.soc_ratio(11, 10) == 1.1
+
+
+# --- scripts/replay.py ---
+
+def test_replay_writes_the_page_the_runs_and_the_gif(tmp_path, capsys):
+    replay_script = load("replay")
+    from pathfinder.replay import load as load_replay
+    from pathfinder.replay import loads
+
+    args = ["--agents", "12", "--scenario", "3", "--delay-probability", "0.1", "--seed", "4",
+            "--html", str(tmp_path / "r.html"), "--json", str(tmp_path / "r"), "--gif-substeps", "1"]
+    try:
+        import PIL  # noqa: F401
+        args += ["--gif", str(tmp_path / "r.gif")]
+    except ImportError:
+        pass
+    assert replay_script.main(args) == 0
+    timetable, ordered = load_replay(tmp_path / "r-timetable.json"), load_replay(tmp_path / "r-ordered.json")
+    assert (timetable["policy"], ordered["policy"]) == ("timetable", "ordered")
+    assert timetable["plan"] == ordered["plan"] and timetable["delayed"][0] == ordered["delayed"][0]
+    page = (tmp_path / "r.html").read_text()
+    start = page.index('type="application/json">') + len('type="application/json">')
+    embedded = json.loads(page[start:page.index("</script>", start)])
+    assert [loads(json.dumps(r)) for r in embedded] == [timetable, ordered]
+    out = capsys.readouterr().out
+    assert "timetable:" in out and "ordered  :" in out and "the check alone" in out
+
+
+def test_replay_on_a_movingai_map(tmp_path):
+    # The MovingAI branch without downloads: the small hand-written map and scenario of tests/data, laid out as
+    # make maps lays out the benchmark set.
+    replay_script = load("replay")
+    (tmp_path / "mapf-map").mkdir()
+    (tmp_path / "scen-random").mkdir()
+    (tmp_path / "mapf-map" / "small.map").write_text((ROOT / "tests" / "data" / "small.map").read_text())
+    (tmp_path / "scen-random" / "small-random-1.scen").write_text((ROOT / "tests" / "data" / "small.scen").read_text())
+    out = tmp_path / "s"
+    assert replay_script.main(["--map", "small", "--agents", "2", "--data", str(tmp_path), "--json", str(out),
+                               "--policies", "ordered", "--delay-robot", "0", "--at", "1", "--steps", "2"]) == 0
+    from pathfinder.replay import load as load_replay
+    r = load_replay(tmp_path / "s-ordered.json")
+    assert r["map"]["name"] == "small, random scenario 1" and r["delayed"][1:3] == [[0], [0]]
+    # Too many agents for the scenario, a missing map: exit 2 with a message, no traceback.
+    assert replay_script.main(["--map", "small", "--agents", "999", "--data", str(tmp_path), "--json", str(out)]) == 2
+    assert replay_script.main(["--map", "nowhere", "--data", str(tmp_path), "--json", str(out)]) == 2
+
+
+def test_replay_exits_1_when_the_planner_fails(tmp_path, capsys):
+    replay_script = load("replay")
+    assert replay_script.main(["--agents", "16", "--scenario", "1", "--time-limit", "1e-9",
+                               "--html", str(tmp_path / "r.html")]) == 1
+    assert "didn't solve" in capsys.readouterr().err and not (tmp_path / "r.html").exists()
+
+
+@pytest.mark.parametrize("args", [
+    [],                                                       # nothing to write
+    ["--at", "3"],                                            # --at without --delay-robot
+    ["--steps", "2"],
+    ["--delay-robot", "99"],                                  # there are 12 robots
+    ["--delay-robot", "1", "--delay-probability", "0.1"],    # one kind of delays or the other
+    ["--delay-probability", "nan"],
+    ["--delay-probability", "1.5"],
+    ["--gif-cell", "3"],
+    ["--gif-substeps", "0"],
+    ["--time-limit", "0"],
+    ["--time-limit", "inf"],
+    ["--policies", "ordered", "ordered"],
+    ["--agents", "0"],
+])
+def test_replay_usage_errors(args, tmp_path):
+    replay_script = load("replay")
+    out = [] if not args else ["--html", str(tmp_path / "r.html")]
+    with pytest.raises(SystemExit) as e:
+        replay_script.main(["--agents", "12"] + args + out)
+    assert e.value.code == 2
