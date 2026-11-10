@@ -4,7 +4,8 @@ Pathfinder plans collision-free paths for many robots on a grid warehouse map at
 MAPF). It is the kind of planning a fleet of warehouse robots needs: every robot has a start and a goal, they all
 move at the same time on the same grid, and no two may ever be in the same cell or swap cells in one step. This
 document is the specification: what a valid plan is, which files it reads, and how the planners (days 2 and 3) and
-the measurements (day 4) work. Where the code and this document disagree, one of them has a bug.
+the measurements (day 4) and the replay viewer (day 5) work. Where the code and this document disagree, one of
+them has a bug.
 
 ## The model
 
@@ -338,6 +339,57 @@ and the makespan added; and each robot delayed once, d steps halfway through its
 every printed table is kept in `results/day4/` with its command and commit, and `scripts/sweep_summary.py` rebuilds
 the README's table from the records.
 
+## The replay viewer (day 5)
+
+The simulator says what happened in numbers; the viewer shows it, so a reader can watch a delay turn into a
+collision under the timetable and into a wait under the ordered policy. Three pieces, each with one job:
+
+- **The replay document** (`python/pathfinder/replay.py`, JSON, `"format": "pathfinder-replay"`, version 1): the
+  map (rows of `.` and `@`), the robots' starts and goals, the plan, every robot's cell at every time step
+  (`trajectories`), the robots delayed in each step (`delayed`; only those not yet finished, as the simulator counts
+  them), the collisions the simulator recorded, and the run's summary. `record()` runs the simulator with an
+  `on_step` callback (`Simulator.run` gained it today) and writes down what it did.
+- **The page** (`python/pathfinder/viewer/viewer.html` and `player.js`): `pathfinder.replay.html()` inlines the script
+  and the replays' JSON into one file that opens in any browser, with no server and nothing fetched. Several runs
+  play side by side on one timeline (play, pause, step, scrub, speed, keyboard), or one is opened from a JSON file.
+- **The GIF** (`python/pathfinder/render.py`, Pillow): the same drawing in palette mode, for the README, where GitHub
+  shows images but runs no script.
+
+**What a frame shows at a moment τ of the run.** At a whole time t each robot is on the centre of
+`trajectories[i][t]`; during step t it moves in a straight line to `trajectories[i][t + 1]`. Its goal is a square
+outline in its colour. A dashed ring is where the *plan* has it at τ, on the plan's clock (clamped to the end of its
+path), so the gap between a robot and its ring is how far behind the delays have put it. A robot delayed in step
+⌊τ⌋ gets an amber ring (and a pause sign on the page). A vertex collision at time T shows as a red ring on its cell
+from T − 0.5 to T + 0.5 (to the end, if T is the run's last moment); a swap as a red bar across the edge during its
+step. The counts under each run: robot-steps of delay in the steps begun, collisions reached, robots on their goals
+for good. Colours: hue `137.508 · i mod 360` (the golden angle), so neighbouring robot numbers differ.
+
+**One set of rules in two languages.** The page computes all of this in JavaScript and the GIF in Python. Rather than
+trust that two copies agree, `positions_at`, `planned_at`, `delayed_at`, `collisions_at`, `counts_at` and
+`robot_hue` exist in both, and a test runs `player.js` under Node on a real run (delays and a collision) and compares
+every value at whole and fractional times, around each collision's window, and before and after the run.
+
+**Checking a replay by running it again.** The simulator is deterministic given the plan and each step's delays, so
+`check()` doesn't re-derive rules one by one: it checks the document's shape and JSON types (an integer is never
+`3.0` or `true`), rebuilds the instance (the constructor enforces the model's rules), validates the plan, executes it
+under the policy with each step's recorded delays, and requires every position, every delay, every collision and the
+summary to come out identical. So a replay that passes is a run the simulator really makes; one with a robot jumping
+a cell, a delayed robot moving, a delay for a robot already finished, a collision left out or a cost edited fails.
+`record()`, `save()`, `load()`, `html()` and the GIF renderer all check. Loading is strict JSON (no `NaN`, no key
+twice in one object). The page itself can't run the simulator, so it checks only the shape it relies on
+(`shapeProblems` in `player.js`), enough that a hand-made file is refused with a message instead of drawing garbage.
+
+**Putting JSON in a page safely.** The replays sit in a `<script type="application/json">` element. In the JSON text
+`<`, `>` and `&` (and U+2028/2029) are written as `\u` escapes, which mean the same characters inside JSON strings,
+the only place they can occur; so no title can contain `</script>` or `<!--` as far as the HTML parser is concerned.
+The template is split at its two placeholders before anything is inserted, so a placeholder's text inside a title is
+never replaced.
+
+**Why a static page and a GIF, not a server.** A replay is small (27.5 KiB for the README's two 16-robot runs, page
+included; 350 KiB for two 100-robot runs of 206 steps on the 161 × 63 MovingAI warehouse) and needs no computation
+the browser can't do, so a file is the simplest thing that works and that a reviewer can open from a download. The
+port reserved for a visualizer (8115) stays unused.
+
 ## Architecture
 
 ```mermaid
@@ -381,7 +433,8 @@ flowchart LR
   core --> PY --> EXP
 ```
 
-Days 2 to 5 fill in the planners, the simulator and the visualizer; day 1 builds the grid, the file formats, the
+Days 2 to 5 fill in the planners, the simulator and the replay viewer (the record, the page and the GIF of "The
+replay viewer (day 5)"); day 1 builds the grid, the file formats, the
 generators, the validator, the CLI and the Python module, so the planners have their inputs and their oracle from
 the start.
 
@@ -407,6 +460,10 @@ the start.
   SOC (day 3) is compared with a brute-force search on tiny instances, and never above prioritized planning's; the
   conflict scanner is compared with `validate()` on random-walk plans. Every CBS call in a test has a node limit, so a
   broken CBS fails a test instead of hanging it.
+- From day 5: every replay is checked by running it again (above), and the edits `check()` must refuse each have a
+  test; the page's JavaScript has Node tests (`tests/viewer/`, CTest `viewer.node`, required in CI) and is compared
+  value for value with the Python side; the GIF's pixels are checked where the replay puts robots, delays,
+  ghosts and collisions (including a real timetable swap).
 
 ## Day plan
 
@@ -416,4 +473,4 @@ the start.
 | 2 | space-time A\* with a reservation table, prioritized planning, heuristic tables by passable cell, `pathfinder plan`, the planner bindings, tests (a brute-force oracle for the search) |
 | 3 | CBS, tests that no plan has a vertex or edge conflict, CBS against a brute-force optimum on tiny instances |
 | 4 | benchmarks (success rate against agents, runtime, SOC against prioritized planning), the step-by-step simulator in Python |
-| 5 | a replay visualizer, README results, WALKTHROUGH.md, v1.0.0 |
+| 5 | the replay record and its check, the viewer page, GIFs, README results, WALKTHROUGH.md, CHANGELOG.md, v1.0.0 |
