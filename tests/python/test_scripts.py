@@ -108,10 +108,7 @@ def test_replay_on_a_movingai_map(tmp_path):
     # The MovingAI branch without downloads: the small hand-written map and scenario of tests/data, laid out as
     # make maps lays out the benchmark set.
     replay_script = load("replay")
-    (tmp_path / "mapf-map").mkdir()
-    (tmp_path / "scen-random").mkdir()
-    (tmp_path / "mapf-map" / "small.map").write_text((ROOT / "tests" / "data" / "small.map").read_text())
-    (tmp_path / "scen-random" / "small-random-1.scen").write_text((ROOT / "tests" / "data" / "small.scen").read_text())
+    small_data(tmp_path)
     out = tmp_path / "s"
     assert replay_script.main(["--map", "small", "--agents", "2", "--data", str(tmp_path), "--json", str(out),
                                "--policies", "ordered", "--delay-robot", "0", "--at", "1", "--steps", "2"]) == 0
@@ -130,6 +127,41 @@ def test_replay_with_prioritized_planning(tmp_path, capsys):
     from pathfinder.replay import load as load_replay
     assert load_replay(tmp_path / "p-timetable.json")["planner"] == "pp"
     assert "pp plan SOC" in capsys.readouterr().out
+
+
+def small_data(tmp_path):
+    """The small hand-written map and scenario of tests/data, laid out as make maps lays out the benchmark set."""
+    (tmp_path / "mapf-map").mkdir(parents=True)
+    (tmp_path / "scen-random").mkdir()
+    (tmp_path / "mapf-map" / "small.map").write_text((ROOT / "tests" / "data" / "small.map").read_text())
+    (tmp_path / "scen-random" / "small-random-1.scen").write_text((ROOT / "tests" / "data" / "small.scen").read_text())
+    return tmp_path
+
+
+def test_replay_of_a_plan_file(tmp_path, capsys):
+    # tests/data/small.plan: the CLI's own test plan for the first 2 agents of small.scen.
+    replay_script = load("replay")
+    data = small_data(tmp_path / "data")
+    assert replay_script.main(["--map", "small", "--agents", "2", "--data", str(data), "--plan",
+                               str(ROOT / "tests" / "data" / "small.plan"), "--json", str(tmp_path / "p")]) == 0
+    from pathfinder.replay import load as load_replay
+    r = load_replay(tmp_path / "p-ordered.json")
+    grid = pf_module().load_map(data / "mapf-map" / "small.map")
+    assert r["plan"] == pf_module().load_plan(ROOT / "tests" / "data" / "small.plan", grid)
+    assert r["planner"] is None and "the plan in" in capsys.readouterr().out
+    # The same plan for three agents: not valid for that instance (exit 1); a file that isn't a plan (exit 2).
+    assert replay_script.main(["--map", "small", "--agents", "3", "--data", str(data), "--plan",
+                               str(ROOT / "tests" / "data" / "small.plan"), "--json", str(tmp_path / "q")]) == 1
+    (tmp_path / "bad.plan").write_text("version 2\n")
+    assert replay_script.main(["--map", "small", "--agents", "2", "--data", str(data), "--plan",
+                               str(tmp_path / "bad.plan"), "--json", str(tmp_path / "q")]) == 2
+    assert not (tmp_path / "q-ordered.json").exists()
+
+
+def pf_module():
+    import pathfinder
+
+    return pathfinder
 
 
 def test_replay_exits_1_when_the_planner_fails(tmp_path, capsys):

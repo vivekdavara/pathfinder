@@ -198,6 +198,9 @@ PYTHONPATH=build/release/python .venv/bin/python scripts/replay.py --agents 16 -
   --delay-probability 0.1 --seed 1 --html replay.html --json replay --gif replay.gif
 PYTHONPATH=build/release/python .venv/bin/python scripts/replay.py --map warehouse-10-20-10-2-1 --agents 100 \
   --planner pp --delay-robot 3 --at 20 --steps 10 --html big.html     # MovingAI maps after `make maps`
+build/release/pathfinder plan data/mapf-map/empty-32-32.map data/scen-random/empty-32-32-random-1.scen 50 --out e.plan
+PYTHONPATH=build/release/python .venv/bin/python scripts/replay.py --map empty-32-32 --agents 50 --plan e.plan \
+  --html e.html                                                       # a plan file from the CLI, replayed
 ```
 
 From Python:
@@ -885,7 +888,7 @@ passes, each finding something:
   change with them.
 - **Finished agents stay on their goals.** That is the standard MAPF semantics and the one that makes warehouse sense
   (a robot doesn't vanish when it arrives), so the validator counts a parked agent in conflicts, and the planners'
-  goal test (DESIGN.md) will forbid ending a path where another agent must still pass.
+  goal test (DESIGN.md) forbids ending a path where another agent must still pass.
 - **Generated files follow the benchmark's conventions**, octile lengths included, so a generated scenario means what
   a benchmark one means.
 - **SplitMix64 instead of `<random>`'s distributions**, which differ between libstdc++ and libc++: the same seed gives

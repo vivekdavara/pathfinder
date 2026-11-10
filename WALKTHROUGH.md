@@ -60,7 +60,7 @@ CBS minimises SOC; prioritized planning doesn't promise to.
 ## The validator
 
 **Why build a validator before any planner?**
-Because it's the oracle: every plan from space-time A\*, prioritized planning and CBS will go through it in the tests,
+Because it's the oracle: every plan from space-time A\*, prioritized planning and CBS goes through it in the tests,
 so a planner bug shows up as a failing test instead of a plausible-looking number. It shares nothing with the
 planners but the grid, so a bug in their conflict detection can't hide in it too.
 
@@ -138,7 +138,7 @@ was in the joint distribution.
 
 **Why a plan format of your own?**
 MovingAI defines maps and scenarios but no format for solutions, and the planners (day 2) need to write plans that
-the CLI can check and the visualizer (day 5) can replay: `version 1`, `agents k`, then one line per agent with its
+the CLI can check and the replay viewer can play (`scripts/replay.py --plan FILE`, day 5): `version 1`, `agents k`, then one line per agent with its
 cells at t = 0, 1, ... as `(x,y)` (DESIGN.md "Plan files", `src/plan_file.cpp`). `pathfinder validate MAP SCEN PLAN`
 prints a valid plan's SOC and makespan, or every problem.
 

@@ -8,8 +8,9 @@ optionally replay JSON files and an animated GIF): DESIGN.md "The replay viewer 
 downloads); any other name is a MovingAI benchmark map from `make maps` (data/mapf-map/<name>.map with scenario
 data/scen-random/<name>-random-<n>.scen). Both policies (or the ones given) execute the same plan under the same
 delays: random_delays draws for every robot at every step, so with one seed both runs see the same delays at the same
-steps. Prints one line per run. Exits 1 if the planner doesn't solve the instance, 2 on a usage error or a map or
-scenario that can't be loaded.
+steps. `--plan FILE` replays a plan from a .plan file (`pathfinder plan ... --out FILE` writes one) instead of
+planning. Prints one line per run. Exits 1 if the planner doesn't solve the instance or the plan file isn't a valid
+plan for it, 2 on a usage error or a map, scenario or plan file that can't be loaded.
 """
 
 from __future__ import annotations
@@ -82,6 +83,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--scenario", type=positive, default=1, help="scenario number (the seed, for the generated floor)")
     ap.add_argument("--agents", type=positive, default=12)
     ap.add_argument("--planner", choices=("cbs", "pp"), default="cbs")
+    ap.add_argument("--plan", type=Path, metavar="FILE",
+                    help="replay this .plan file (e.g. from `pathfinder plan --out`) instead of planning")
     ap.add_argument("--time-limit", type=time_limit, default=10.0, help="seconds for the planner")
     ap.add_argument("--policies", nargs="+", choices=POLICIES, default=list(POLICIES))
     delays = ap.add_mutually_exclusive_group()
@@ -115,14 +118,30 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.delay_robot is not None and args.delay_robot >= len(instance.agents):
         ap.error(f"--delay-robot {args.delay_robot}: there are {len(instance.agents)} robots")
-    if args.planner == "cbs":
-        result = pf.cbs(instance, time_limit=args.time_limit)
+    if args.plan is not None:
+        try:
+            plan = pf.load_plan(args.plan, instance.grid)
+        except (RuntimeError, ValueError) as e:
+            print(f"can't load {args.plan}: {e}", file=sys.stderr)
+            return 2
+        found = pf.validate(instance, plan)
+        if not found.valid:  # the simulator runs valid plans only
+            print(f"{args.plan} isn't a valid plan for {where} with {args.agents} agents: "
+                  f"{pf.describe(found.problems[0], instance.grid)}", file=sys.stderr)
+            return 1
+        planner, soc, makespan = None, found.sum_of_costs, found.makespan
+        print(f"{where}: {args.agents} robots, the plan in {args.plan}: SOC {soc}, makespan {makespan}")
     else:
-        result = pf.prioritized_planning(instance, time_limit=args.time_limit)
-    if not result.solved:
-        print(f"{args.planner} didn't solve {where} with {args.agents} agents: {result.status}", file=sys.stderr)
-        return 1
-    print(f"{where}: {args.agents} robots, {args.planner} plan SOC {result.sum_of_costs}, makespan {result.makespan}")
+        if args.planner == "cbs":
+            result = pf.cbs(instance, time_limit=args.time_limit)
+        else:
+            result = pf.prioritized_planning(instance, time_limit=args.time_limit)
+        if not result.solved:
+            print(f"{args.planner} didn't solve {where} with {args.agents} agents: {result.status}", file=sys.stderr)
+            return 1
+        planner, plan = args.planner, result.plan
+        print(f"{where}: {args.agents} robots, {args.planner} plan SOC {result.sum_of_costs}, makespan "
+              f"{result.makespan}")
 
     if args.delay_robot is not None:
         how = f"robot {args.delay_robot} delayed {args.steps} steps from t = {args.at}"
@@ -133,7 +152,7 @@ def main(argv: list[str] | None = None) -> int:
         schedule = (delay_robot(args.delay_robot, args.at, args.steps) if args.delay_robot is not None
                     else random_delays(args.delay_probability, args.seed))
         start = time.perf_counter()
-        replay = record(instance, result.plan, policy, schedule, planner=args.planner,
+        replay = record(instance, plan, policy, schedule, planner=planner,
                         title=f"{args.agents} robots, {how}", map_name=where)
         recorded = time.perf_counter() - start
         start = time.perf_counter()

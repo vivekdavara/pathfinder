@@ -138,7 +138,7 @@ It also computes each path's cost, the SOC and the makespan, by the definitions 
 ### Plan files (`.plan`)
 
 MovingAI defines no format for solutions, so Pathfinder has its own, small and strict, for planners' output, the
-CLI's `validate` and (day 5) the replay visualizer:
+CLI's `validate` and the replay viewer (`scripts/replay.py --plan FILE`, day 5):
 
 ```
 version 1
@@ -182,7 +182,7 @@ found no path around the ones planned before it.
   orz900d, 0.076 ms against 0.139 ms on den520d; `make bench`, README "Results (day 2)"). A lookup during the
   search still costs one more memory read (cell → number) than a table of every cell. Prioritized planning builds
   each agent's table when its turn comes and drops it after (one table in memory at a time); CBS, which replans
-  any agent at any node, will keep one per agent, which is where the tenfold saving matters.
+  any agent at any node, keeps one per agent, which is where the tenfold saving matters.
 - **The reservation table** (`reservation.hpp`) is written from the searching agent's side: every entry forbids that
   agent something. Three kinds: a cell at a time t; a move u → v between t and t + 1 (stored as a bit per direction
   under (u, t)); and a cell from a time on (another agent resting at its goal for ever). Prioritized planning turns
@@ -392,7 +392,7 @@ never replaced.
 **Why a static page and a GIF, not a server.** A replay is small (27.5 KiB for the README's two 16-robot runs, page
 included; 350 KiB for two 100-robot runs of 206 steps on the 161 × 63 MovingAI warehouse) and needs no computation
 the browser can't do, so a file is the simplest thing that works and that a reviewer can open from a download. The
-port reserved for a visualizer (8115) stays unused.
+port reserved for a visualizer server (8115) stays unused.
 
 ## Architecture
 
