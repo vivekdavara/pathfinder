@@ -19,7 +19,7 @@ def fnv1a(text: str) -> int:
 
 
 def test_version_matches_the_cmake_project():
-    assert pf.__version__ == "0.1.0"
+    assert pf.__version__ == "1.0.0"
 
 
 def test_grid_basics():

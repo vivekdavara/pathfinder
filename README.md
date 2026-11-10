@@ -189,8 +189,8 @@ The day-4 experiments (both need `make maps release` first, and `PYTHONPATH=buil
 ```
 
 The replay viewer (day 5): plan one instance, execute the plan with both policies under the same delays, and write
-the runs as one page (open it in any browser: play, pause, step, scrub; or open another replay JSON file), as replay
-JSON files, and as a GIF:
+the runs as one page (open it in any browser: play, pause, step, scrub; or open another replay JSON file; add
+`#t=18` to the page's address to open it at that moment), as replay JSON files, and as a GIF:
 
 ```bash
 PYTHONPATH=build/release/python .venv/bin/python scripts/replay.py --agents 16 --scenario 1 \
@@ -238,7 +238,7 @@ The headline numbers, each from the day's section below, where its command, mach
 | ...and executed in the plan's order? | Never a collision or a deadlock; each robot-step of delay costs the fleet 1.014 to 1.050 robot-steps on that map, 1.094 to 1.205 on the denser random-32-32-20 | day 4 |
 | How fast is the simulator? | 1.13 to 1.22 million robot-steps a second ordered, 1.68 to 1.87 million as a timetable | day 4 |
 | What does a replay cost? | 16 robots, 31 steps: recorded and checked in 1.2 to 1.4 ms, a 27.5 KiB page for two runs; 100 robots, 206 steps: 31.6 to 41.4 ms, 350 KiB | day 5 |
-| Tests | 204 CTest tests: the GoogleTest suites and the CLI script, 160 pytest tests (`python.pytest`), 15 Node tests (`viewer.node`), the examples and scripts end to end; green on GCC 14, Clang 18, Apple Clang and under ASan + UBSan in CI | day 5 |
+| Tests | 204 CTest tests: the GoogleTest suites and the CLI script, 166 pytest tests (`python.pytest`, the viewer page in headless Chrome among them), 16 Node tests (`viewer.node`), the examples and scripts end to end; green on GCC 14, Clang 18, Apple Clang and under ASan + UBSan in CI | day 5 |
 
 ## Results (day 5)
 
@@ -246,10 +246,13 @@ Measured on an Apple M3, macOS 26.6, Python 3.11.12, Pillow 13.0.0, Node 23.11.0
 session running alongside (load average about 3.4): the times are indications; sizes, counts and collisions don't
 depend on load. Every number comes from the command next to it.
 
-- **Tests**: 204 CTest tests (`ctest --preset dev -N`; 202 on day 4): new are `viewer.node` (15 Node tests of
+- **Tests**: 204 CTest tests (`ctest --preset dev -N`; 202 on day 4): new are `viewer.node` (16 Node tests of
   `player.js`'s pure functions: positions, the plan's ghosts, delays, the collision windows, counts, colours, the
-  shape check) and `python.replay` (the script end to end, writing the page, the JSON and a GIF); `python.pytest`
-  holds 160 pytest tests (97 on day 4): `test_replay.py` 36 (the record is the simulator's run; every kind of edit
+  shape check, `#t=` links) and `python.replay` (the script end to end, writing the page, the JSON and a GIF);
+  `python.pytest` holds 166 pytest tests (97 on day 4): `test_page_in_chrome.py` 6 (the page loaded in headless
+  Chrome: the clock, each run's counts and the error line as the script left them, and a probe reading the canvas
+  at every robot's position and inside a collision's ring; three hand mutations of the drawing code each fail it),
+  `test_replay.py` 36 (the record is the simulator's run; every kind of edit
   `check()` must refuse; strict JSON; the page's embedding; Node against Python on every moment of a real run),
   `test_render.py` 9 (each robot's centre pixel in its colour, the amber ring, red only in the run with collisions,
   a real timetable swap drawn as a bar, the GIF's loop and frame delays read back), `test_scripts.py` 23 (5 on
@@ -270,7 +273,8 @@ depend on load. Every number comes from the command next to it.
   planning, p = 0.05): empty-32-32 (53 steps) 8.4 and 10.7 ms, a 94.5 KiB page; warehouse-10-20-10-2-1 (206 steps)
   31.6 and 41.4 ms, 350.1 KiB, and a 7.5 MiB GIF at 6 pixels a cell. The timetable runs had 77 and 132 collisions,
   the ordered runs none.
-- **In a browser** (Chrome, the page opened from a file): no console errors; the collision ring at t = 18 and the
+- **In a browser** (Chrome, the page opened from a file, by hand; `test_page_in_chrome.py` now automates the
+  drawing and loading checks): no console errors; the collision ring at t = 18 and the
   plan's ghosts trailing delayed robots where the replay puts them; Play, then Space pauses once, the right arrow
   steps once; maps 1.6 times wider than tall are stacked, so the 161 x 63 warehouse gets 6 px cells instead of 3 and
   the 27 x 12 floor 35 px.

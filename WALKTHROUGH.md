@@ -453,9 +453,11 @@ delays cost when nobody collides.
 In layers. The pure functions are tested in Node (15 tests) and against Python. The GIF's pixels are checked where
 the replay says things are: every robot's centre pixel in its palette colour at several moments of both runs, an
 amber ring around each delayed robot, red only in the run that has collisions, and a real timetable swap (found by
-searching seeds) drawn as a red bar along the whole edge. The page was opened in a browser to check for console
-errors, the collision ring at its time, the controls (Space pausing once with the Play button focused was a bug I
-found that way) and the cell sizes.
+searching seeds) drawn as a red bar along the whole edge. The page's own drawing code runs in headless Chrome in
+the test suite: a probe script added to the test page reads the canvas at every robot's position and inside a
+collision's ring after the page has drawn itself, and three hand-made bugs in the drawing (x and y swapped, the ring
+too small, the wrong colours) each fail it. The controls I checked by hand in a browser (Space pausing once with the
+Play button focused was a bug I found that way).
 
 ## The review
 

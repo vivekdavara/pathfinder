@@ -351,7 +351,8 @@ collision under the timetable and into a wait under the ordered policy. Three pi
   `on_step` callback (`Simulator.run` gained it today) and writes down what it did.
 - **The page** (`python/pathfinder/viewer/viewer.html` and `player.js`): `pathfinder.replay.html()` inlines the script
   and the replays' JSON into one file that opens in any browser, with no server and nothing fetched. Several runs
-  play side by side on one timeline (play, pause, step, scrub, speed, keyboard), or one is opened from a JSON file.
+  play side by side on one timeline (play, pause, step, scrub, speed, keyboard), or one is opened from a JSON file;
+  `page.html#t=18` opens it at that moment.
 - **The GIF** (`python/pathfinder/render.py`, Pillow): the same drawing in palette mode, for the README, where GitHub
   shows images but runs no script.
 
@@ -463,7 +464,8 @@ the start.
 - From day 5: every replay is checked by running it again (above), and the edits `check()` must refuse each have a
   test; the page's JavaScript has Node tests (`tests/viewer/`, CTest `viewer.node`, required in CI) and is compared
   value for value with the Python side; the GIF's pixels are checked where the replay puts robots, delays,
-  ghosts and collisions (including a real timetable swap).
+  ghosts and collisions (including a real timetable swap); and the page is loaded in headless Chrome, where a probe
+  reads its canvas at every robot and collision (required in CI too).
 
 ## Day plan
 
