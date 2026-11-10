@@ -42,7 +42,8 @@ function swap() {
     trajectories: [[0, 1], [1, 0]],
     delayed: [[]],
     collisions: [{ kind: "swap", a: 0, b: 1, time: 0, cell: 0, to: 1 }],
-    summary: {},
+    summary: { completed: true, steps: 1, planned_sum_of_costs: 2, costs: [1, 1], sum_of_costs: 2, makespan: 1,
+               delay_steps: 0, collisions: 1 },
   };
 }
 
@@ -163,6 +164,13 @@ test("shape problems are found", () => {
   assert.match(broken((r) => { r.robots[0].goal = 1.5; }).join(), /robots/);
   assert.match(broken((r) => { r.collisions[0].kind = "edge"; }).join(), /collisions/);
   assert.match(broken((r) => { delete r.summary; }).join(), /summary/);
+  assert.match(broken((r) => { r.summary.completed = 1; }).join(), /summary/);
+  assert.match(broken((r) => { r.summary.makespan = "4"; }).join(), /summary/);
+  assert.match(broken((r) => { r.planner = 7; }).join(), /planner/);
+  assert.match(broken((r) => { r.title = {}; }).join(), /title/);
+  assert.match(broken((r) => { r.map.name = []; }).join(), /name/);
+  assert.match(broken((r) => { r.policy = null; }).join(), /policy/);
+  assert.deepEqual(broken((r) => { r.planner = null; delete r.title; }), []);
 });
 
 test("a file holds one replay or a list", () => {
@@ -223,9 +231,68 @@ test("a robot's summary by a moment", () => {
   assert.match(player.describeRobot(swap(), 1, 0), /collided with 0 at t = 0 \(swap\)$/);
 });
 
+test("captions", () => {
+  assert.equal(player.caption(corridor()), " — 2 robots, SOC 7 (planned 7), makespan 4");
+  assert.equal(player.caption({ ...corridor(), summary: { ...corridor().summary, completed: false } }),
+               " — 2 robots, stopped after 4 steps");
+});
+
 test("labels", () => {
   assert.equal(player.label(corridor()), "timetable · corridor");
   assert.equal(player.label({ ...corridor(), planner: "cbs" }), "CBS · timetable · corridor");
   assert.equal(player.count(1, "collision"), "1 collision");
   assert.equal(player.count(0, "collision"), "0 collisions");
+});
+
+// A property of the page's trust boundary: any document shapeProblems accepts can be computed on (every pure
+// function, every robot, moments before, during and after the run) without throwing. Corruptions are random: a value
+// replaced by another type or an out-of-range number, a key deleted, an array truncated or extended; most are
+// refused, and the ones accepted must still be safe to draw.
+test("whatever the shape check accepts can be computed on", () => {
+  let seed = 20261110;
+  const random = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+  const pick = (list) => list[Math.floor(random() * list.length)];
+  const junk = () => pick([null, -1, 0, 1, 2.5, 7, 99, 1e9, "x", "", true, [], {}, [0], [[0]], { kind: "swap" }]);
+  const paths = (doc) => {
+    // Every place in the document a value can be changed: [parent, key].
+    const out = [];
+    const walk = (v) => {
+      if (v && typeof v === "object") {
+        for (const k of Object.keys(v)) {
+          out.push([v, k]);
+          walk(v[k]);
+        }
+      }
+    };
+    walk(doc);
+    return out;
+  };
+  let accepted = 0;
+  for (let n = 0; n < 3000; n++) {
+    const doc = JSON.parse(JSON.stringify(pick([corridor(), swap()])));
+    for (let edits = 1 + Math.floor(random() * 3); edits > 0; edits--) {
+      const [parent, key] = pick(paths(doc));
+      const what = random();
+      if (what < 0.5) parent[key] = junk();
+      else if (what < 0.7) delete parent[key];
+      else if (Array.isArray(parent[key])) parent[key] = what < 0.85 ? parent[key].slice(0, -1) : [...parent[key], junk()];
+      else parent[key] = typeof parent[key] === "number" ? parent[key] + pick([-1, 1, 100]) : junk();
+    }
+    // What the page can be given is JSON.parse's output: no holes in arrays (a deleted element becomes null).
+    const parsed = JSON.parse(JSON.stringify(doc));
+    if (player.shapeProblems(parsed).length) continue;
+    accepted++;
+    const end = parsed.delayed.length;
+    for (const t of [-1, 0, 0.5, end / 2, end, end + 1]) {
+      player.positionsAt(parsed, t);
+      player.plannedAt(parsed, t);
+      player.delayedAt(parsed, t);
+      player.collisionsAt(parsed, t);
+      player.countsAt(parsed, t);
+      parsed.robots.forEach((_, i) => player.describeRobot(parsed, i, t));
+    }
+    player.label(parsed);
+    player.caption(parsed);
+  }
+  assert.ok(accepted > 100, `only ${accepted} corrupted documents were accepted: the test isn't exercising much`);
 });

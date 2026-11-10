@@ -396,3 +396,48 @@ def test_moments_of_the_corridor():
     g = pf.Grid(3, 1)
     still = record(pf.Instance(g, [pf.Agent(0, 0), pf.Agent(1, 2)]), [[0], [1, 2]], "ordered")
     assert counts_at(still, 0)["finished"] == 1 and counts_at(still, 1)["finished"] == 2
+
+
+# --- a property: every single edit is refused ---
+
+def single_edits(replay, rng, count):
+    """``count`` random edits of one value each: a cell of a trajectory moved to another passable cell, a robot added
+    to or removed from one step's delays, a collision's field changed, a summary number changed."""
+    w, h = replay["map"]["width"], replay["map"]["height"]
+    passable = [y * w + x for y in range(h) for x in range(w) if replay["map"]["rows"][y][x] == "."]
+    n, steps = len(replay["robots"]), len(replay["delayed"])
+    kinds = ["trajectory", "delay"] + (["collision"] if replay["collisions"] else []) + ["summary"]
+    for _ in range(count):
+        kind = rng.choice(kinds)
+        r = copy.deepcopy(replay)
+        if kind == "trajectory":
+            i, t = rng.randrange(n), rng.randrange(1, steps + 1)
+            r["trajectories"][i][t] = rng.choice([c for c in passable if c != r["trajectories"][i][t]])
+        elif kind == "delay":
+            t, i = rng.randrange(steps), rng.randrange(n)
+            held = set(r["delayed"][t]) ^ {i}
+            r["delayed"][t] = sorted(held)
+        elif kind == "collision":
+            c = rng.choice(r["collisions"])
+            field = rng.choice(["a", "b", "time", "cell"])
+            c[field] = c[field] + rng.choice([-1, 1])
+        else:
+            key = rng.choice(["sum_of_costs", "makespan", "delay_steps", "collisions", "steps", "planned_sum_of_costs"])
+            r["summary"][key] += rng.choice([-1, 1])
+        yield kind, r
+
+
+@pytest.mark.parametrize("policy", ["timetable", "ordered"])
+def test_every_single_edit_of_a_real_run_is_refused(policy):
+    import random
+    rng = random.Random(20261110)
+    grid = pf.warehouse_map(pf.WarehouseLayout())
+    instance = pf.make_instance(grid, pf.random_scenario(grid, 16, 1, "warehouse.map"), 16)
+    plan = pf.cbs(instance, max_nodes=100_000).plan
+    replay = record(instance, plan, policy, random_delays(0.1, seed=1))
+    refused = {}
+    for kind, r in single_edits(replay, rng, 400):
+        with pytest.raises(ReplayError):
+            check(r)
+        refused[kind] = refused.get(kind, 0) + 1
+    assert set(refused) >= {"trajectory", "delay", "summary"}  # every kind was tried

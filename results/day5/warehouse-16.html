@@ -245,7 +245,17 @@ function shapeProblems(doc) {
       isInt(c.a) && isInt(c.b) && isInt(c.time) && isCell(c.cell) && (c.kind === "vertex" || isCell(c.to)))) {
     problems.push("collisions must be vertex or swap collisions");
   }
-  if (!doc.summary || typeof doc.summary !== "object") problems.push("summary is missing");
+  // The labels and the summary the captions show.
+  const optionalString = (v) => v === undefined || v === null || typeof v === "string";
+  if (!optionalString(doc.planner) || !optionalString(doc.title) || !optionalString(m.name)) {
+    problems.push("the planner, the title and the map's name must be strings");
+  }
+  if (typeof doc.policy !== "string") problems.push("policy must be a string");
+  const s = doc.summary;
+  if (!s || typeof s !== "object" || typeof s.completed !== "boolean" ||
+      !["steps", "sum_of_costs", "planned_sum_of_costs", "makespan"].every((k) => isInt(s[k]))) {
+    problems.push("summary must say whether the run completed, and its steps, costs and makespan");
+  }
   return problems;
 }
 
@@ -278,6 +288,14 @@ function parseHash(hash) {
 
 function count(n, what) {
   return `${n} ${what}${n === 1 ? "" : "s"}`;
+}
+
+// What a run's caption says after its label.
+function caption(replay) {
+  const s = replay.summary;
+  const result = s.completed ? `SOC ${s.sum_of_costs} (planned ${s.planned_sum_of_costs}), makespan ${s.makespan}` :
+    `stopped after ${s.steps} steps`;
+  return ` — ${replay.robots.length} robots, ${result}`;
 }
 
 function label(replay) {
@@ -445,12 +463,9 @@ function startPage() {
     panels.replaceChildren(...replays.map((replay) => {
       const panel = document.createElement("figure");
       const title = document.createElement("figcaption");
-      const s = replay.summary;
-      const result = s.completed ? `SOC ${s.sum_of_costs} (planned ${s.planned_sum_of_costs}), makespan ${s.makespan}` :
-        `stopped after ${s.steps} steps`;
       title.innerHTML = "<strong></strong><span></span>";
       title.firstChild.textContent = label(replay);
-      title.lastChild.textContent = ` — ${replay.robots.length} robots, ${result}`;
+      title.lastChild.textContent = caption(replay);
       const counts = document.createElement("div");
       counts.className = "counts";
       const robot = document.createElement("div");
@@ -548,7 +563,7 @@ if (typeof document !== "undefined") {
 
 if (typeof module !== "undefined") {
   module.exports = { positionsAt, plannedAt, delayedAt, collisionsAt, countsAt, robotHue, shapeProblems, asReplays,
-                     stepOf, label, count, parseHash, arrival, robotAt, robotSummary, describeRobot };
+                     stepOf, label, caption, count, parseHash, arrival, robotAt, robotSummary, describeRobot };
 }
 </script>
 </body>
