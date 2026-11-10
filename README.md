@@ -869,7 +869,7 @@ fix before had missed; no round found a bug in the simulator.
 
 No review agent ran today. The session started five hours late (the Mac slept from 10:12 to 15:01 with this run
 open), at the same time as the other track's session, which runs review agents of its own; on an earlier day two
-agents and a session together hit the account's usage limit and stalled both runs. So the review was mine, in three
+agents and a session together hit the account's usage limit and stalled both runs. So the review was mine, in four
 passes, each finding something:
 
 - **Reading it over** (`9d5912a`): `scripts/replay.py` ignored `--at` and `--steps` without `--delay-robot`, sent
@@ -879,6 +879,11 @@ passes, each finding something:
   languages, above.
 - **Coverage** (`599d230`): no test had a valid instance with an invalid plan (each earlier plan edit broke the
   instance first), and five refusals had no test.
+- **Property tests** (`ba4beac`): 3,000 random corruptions of a replay showed the page's shape check accepting a
+  file with `"planner": 7` (or a title, map name, policy or summary of the wrong type), after which the page failed
+  with "toUpperCase is not a function" instead of saying what was wrong; the shape check now covers every field the
+  captions read. The Python property (400 random single edits of a real run under each policy) found nothing:
+  `check()` refused every one.
 - And one claim of mine, caught before it was committed: a test comment said simulator runs never contain a swap.
   Timetable runs do (day 4 counted them), so the test now draws a real one (prioritized planning, 8 agents, scenario
   seed 2, delays seed 1: robots 3 and 7 swap cells 12 and 11 between times 6 and 7).

@@ -465,11 +465,13 @@ Play button focused was a bug I found that way).
 
 **How was day 5 reviewed?**
 By me, not an agent: the run started five hours late, at the same time as the other project's session, and two
-sessions plus agents had hit the account's usage limit before. Three passes, each finding something: reading the
+sessions plus agents had hit the account's usage limit before. Four passes, each finding something: reading the
 code over (four edge cases in the script and the page), a mutation check of 38 mutants (two test gaps, and a special
 case in both languages that did nothing: a collision at the run's last moment already falls in its window) and 10
 more for the robot following (two more gaps: a robot second in a collision named the wrong partner in a mutant no
-test saw), and coverage (no test had a valid instance with an invalid plan). And a false claim of mine in a test comment, that
+test saw), coverage (no test had a valid instance with an invalid plan), and property tests (the page's shape check
+let `"planner": 7` through, and the page then failed with a JavaScript error instead of saying what was wrong with
+the file). And a false claim of mine in a test comment, that
 simulator runs never contain a swap: timetable runs do, and the test now draws a real one.
 
 **How was day 1 reviewed?**
