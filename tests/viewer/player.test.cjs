@@ -172,6 +172,15 @@ test("a file holds one replay or a list", () => {
   assert.throws(() => player.asReplays([corridor(), { format: "x" }]), /replay 2/);
 });
 
+test("a link's moment", () => {
+  assert.equal(player.timeFromHash("#t=18"), 18);
+  assert.equal(player.timeFromHash("#t=2.5"), 2.5);
+  assert.equal(player.timeFromHash("#t=0"), 0);
+  for (const bad of ["", "#", "#t=", "#t=-1", "#t=abc", "#t=1e3", "#t=3&x=1", "#x=3", null, undefined]) {
+    assert.equal(player.timeFromHash(bad), null, String(bad));
+  }
+});
+
 test("labels", () => {
   assert.equal(player.label(corridor()), "timetable · corridor");
   assert.equal(player.label({ ...corridor(), planner: "cbs" }), "CBS · timetable · corridor");

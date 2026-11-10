@@ -214,6 +214,13 @@ function asReplays(doc) {
   return list;
 }
 
+// The moment a link asks for, "#t=18" or "#t=2.5"; null for anything else (a negative or non-numeric time, another
+// fragment). The page clamps it to the run.
+function timeFromHash(hash) {
+  const m = /^#t=(\d+(?:\.\d+)?)$/.exec(hash || "");
+  return m ? Number(m[1]) : null;
+}
+
 function count(n, what) {
   return `${n} ${what}${n === 1 ? "" : "s"}`;
 }
@@ -429,6 +436,12 @@ function startPage() {
   if (embedded && embedded.textContent.trim()) {
     try {
       show(asReplays(JSON.parse(embedded.textContent)));
+      // A link can open the page at a moment: page.html#t=18.
+      const start = timeFromHash(location.hash);
+      if (start !== null) {
+        state.time = Math.min(start, end());
+        render();
+      }
     } catch (err) {
       $("error").textContent = `The embedded replay can't be shown: ${err.message}`;
     }
@@ -444,7 +457,7 @@ if (typeof document !== "undefined") {
 
 if (typeof module !== "undefined") {
   module.exports = { positionsAt, plannedAt, delayedAt, collisionsAt, countsAt, robotHue, shapeProblems, asReplays,
-                     stepOf, label, count };
+                     stepOf, label, count, timeFromHash };
 }
 </script>
 </body>
