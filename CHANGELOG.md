@@ -48,7 +48,7 @@ the code implements, [WALKTHROUGH.md](WALKTHROUGH.md) the questions it should be
 ### Quality
 
 - 204 CTest tests: the GoogleTest suites (brute-force oracles for space-time A\* and for CBS's optimum, randomly
-  damaged files for the parsers), the CLI script, 174 pytest tests (the page in headless Chrome among them, clicks
+  damaged files for the parsers), the CLI script, 175 pytest tests (the page in headless Chrome among them, clicks
   included), 21 Node tests of the viewer's script, the examples and scripts end to end.
 - CI on every push: GCC 14 and Clang 18 on Ubuntu, Apple Clang on macOS (Debug with warnings as errors, Release, a
   benchmark smoke test), and the C++ tests under ASan and UBSan.

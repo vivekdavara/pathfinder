@@ -242,7 +242,7 @@ The headline numbers, each from the day's section below, where its command, mach
 | ...and executed in the plan's order? | Never a collision or a deadlock; each robot-step of delay costs the fleet 1.014 to 1.050 robot-steps on that map, 1.094 to 1.205 on the denser random-32-32-20 | day 4 |
 | How fast is the simulator? | 1.13 to 1.22 million robot-steps a second ordered, 1.68 to 1.87 million as a timetable | day 4 |
 | What does a replay cost? | 16 robots, 31 steps: recorded and checked in 1.4 to 1.5 ms, a 33.5 KiB page and a 234 KiB GIF for two runs; 100 robots, 206 steps: 42 to 56 ms, a 356 KiB page (load 5, another session alongside) | day 5 |
-| Tests | 204 CTest tests: the GoogleTest suites and the CLI script, 174 pytest tests (`python.pytest`, the viewer page in headless Chrome among them), 21 Node tests (`viewer.node`), the examples and scripts end to end; green on GCC 14, Clang 18, Apple Clang and under ASan + UBSan in CI | day 5 |
+| Tests | 204 CTest tests: the GoogleTest suites and the CLI script, 175 pytest tests (`python.pytest`, the viewer page in headless Chrome among them), 21 Node tests (`viewer.node`), the examples and scripts end to end; green on GCC 14, Clang 18, Apple Clang and under ASan + UBSan in CI | day 5 |
 
 ## Results (day 5)
 
@@ -254,15 +254,15 @@ depend on load. Every number comes from the command next to it.
   `player.js`'s pure functions: positions, the plan's ghosts, delays, the collision windows, counts, colours, the
   shape check, links, the robot under a point, a robot's summary, captions; and a property: 3,000 random
   corruptions, every one the shape check accepts computed on without an exception) and `python.replay` (the script
-  end to end, writing the page, the JSON and a GIF); `python.pytest` holds 174 pytest tests (97 on day 4):
+  end to end, writing the page, the JSON and a GIF); `python.pytest` holds 175 pytest tests (97 on day 4):
   `test_page_in_chrome.py` 11 (the page loaded in headless Chrome: the clock, each run's counts, robot lines and
   error line as the script left them; a probe reading the canvas at every robot's position and inside a collision's
   ring; links to a moment and a robot; click events on the canvas selecting a robot and clearing it; three hand
   mutations of the drawing code each fail it), `test_replay.py` 38 (the record is the simulator's run; every kind
   of edit `check()` must refuse, and 400 random single edits of a real run under each policy, all refused; strict
-  JSON; the page's embedding; Node against Python on every moment of a real run), `test_render.py` 9 (each robot's
+  JSON; the page's embedding; Node against Python on every moment of a real run), `test_render.py` 10 (each robot's
   centre pixel in its colour, the amber ring, red only in the run with collisions, a real timetable swap drawn as a
-  bar, the GIF's loop and frame delays read back), `test_scripts.py` 24 (5 on day 4; a `.plan` file from the CLI
+  bar, the GIF's loop and frame delays read back, and every frame read back pixel for pixel), `test_scripts.py` 24 (5 on day 4; a `.plan` file from the CLI
   replayed among them). The pytest suite took 46 s (`pytest --durations=8 tests/python`, with another session
   running alongside): the two edit properties 4.0 and 3.6 s, the 11 Chrome tests 21.8 s run on their own. Branch
   coverage under the pytest suite (coverage.py 7.17.2 in a scratch venv, not a project dependency:
