@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pathfinder replay</title>
+<style>
+  :root {
+    --page: #f6f6f3; --text: #1d1d1b; --muted: #66665f; --panel: #ffffff; --line: #d9d9d2;
+    --floor: #ecebe4; --wall: #3a3a36; --delay: #e0a100; --collision: #d1242f; --on-robot: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #161615; --text: #ecece6; --muted: #a3a39b; --panel: #20201e; --line: #3a3a36;
+      --floor: #2b2b28; --wall: #0b0b0a; --delay: #f2b705; --collision: #ff5a5f; --on-robot: #101010;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: var(--page); color: var(--text);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.lede { margin: 0 0 14px; color: var(--muted); max-width: 70ch; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+  .controls input[type=range] { flex: 1 1 220px; min-width: 160px; }
+  button, select { font: inherit; padding: 4px 12px; border: 1px solid var(--line); border-radius: 6px;
+                   background: var(--panel); color: var(--text); cursor: pointer; }
+  #clock { font-variant-numeric: tabular-nums; min-width: 9ch; }
+  #panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 16px; }
+  figure { margin: 0; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+           overflow: hidden; }
+  figcaption { margin-bottom: 8px; }
+  figcaption span, .counts { color: var(--muted); }
+  .counts { margin-top: 6px; font-variant-numeric: tabular-nums; }
+  canvas { display: block; max-width: 100%; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 14px; color: var(--muted); }
+  .legend i { display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px;
+              border-radius: 50%; }
+  #error { color: var(--collision); margin: 8px 0 0; }
+  label.file { color: var(--muted); }
+</style>
+</head>
+<body>
+<h1 id="heading">Pathfinder replay</h1>
+<p class="lede">Robots executing a multi-agent plan, step by step. Each robot's goal is the square outline in its
+colour; the dashed ring is where the plan has it at this moment, so the gap is how far behind the delays have put it.</p>
+<div class="controls">
+  <button id="play" type="button">Play</button>
+  <button id="back" type="button" aria-label="One step back">&#9664;</button>
+  <button id="forward" type="button" aria-label="One step forward">&#9654;</button>
+  <select id="speed" aria-label="Speed">
+    <option value="1">1 step/s</option>
+    <option value="2" selected>2 steps/s</option>
+    <option value="4">4 steps/s</option>
+    <option value="8">8 steps/s</option>
+  </select>
+  <input id="time" type="range" min="0" max="0" step="0.01" value="0" aria-label="Time">
+  <span id="clock">t = 0.0 / 0</span>
+  <label class="file">or open a replay: <input id="file" type="file" accept=".json,application/json"></label>
+</div>
+<div id="panels"></div>
+<p id="error" role="alert"></p>
+<div class="legend">
+  <span><i style="background: var(--delay)"></i>delayed this step (holds its cell)</span>
+  <span><i style="background: var(--collision)"></i>collision (two robots in one cell, or swapping)</span>
+  <span>Space: play/pause · ←/→: one step</span>
+</div>
+<script id="replays" type="application/json">/*REPLAYS*/</script>
+<script>/*PLAYER*/</script>
+</body>
+</html>

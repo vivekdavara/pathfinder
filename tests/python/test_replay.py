@@ -3,12 +3,15 @@ simulator wouldn't reproduce."""
 
 import copy
 import json
+import os
+import shutil
+import subprocess
 
 import pytest
 
 import pathfinder as pf
-from pathfinder.replay import (FORMAT, VERSION, ReplayError, check, dumps, load, loads, map_rows, positions_at,
-                               record, save)
+from pathfinder.replay import (FORMAT, VERSION, VIEWER, ReplayError, check, dumps, html, load, loads, map_rows,
+                               positions_at, record, save, write_html)
 from pathfinder.simulator import Simulator, delay_robot, random_delays
 
 
@@ -270,3 +273,79 @@ def test_strict_json():
         loads(nan)
     with pytest.raises(ReplayError, match="must be an object"):
         loads("[]")
+
+
+# --- the viewer page ---
+
+def embedded(page):
+    start = page.index('<script id="replays" type="application/json">') + len(
+        '<script id="replays" type="application/json">')
+    return json.loads(page[start:page.index("</script>", start)])
+
+
+def test_the_page_embeds_the_replays_and_the_player(good):
+    instance, plan = corridor()
+    other = record(instance, plan, "ordered")
+    page = html([good, other])
+    assert embedded(page) == [good, other]
+    player = (VIEWER / "player.js").read_text()
+    assert player in page and "/*PLAYER*/" not in page and "/*REPLAYS*/" not in page
+    assert page.count("</script>") == 2
+
+
+def test_no_title_can_break_out_of_the_data_element():
+    instance, plan = corridor()
+    nasty = "</script><script>alert(1)</script><!-- /*PLAYER*/ /*REPLAYS*/ &  "
+    replay = record(instance, plan, "ordered", title=nasty, map_name="</SCRIPT>")
+    page = html([replay])
+    assert page.lower().count("</script") == 2 and "<!--" not in page
+    assert embedded(page)[0]["title"] == nasty and embedded(page)[0]["map"]["name"] == "</SCRIPT>"
+    assert " " not in page
+
+
+def test_the_page_refuses_bad_replays(good):
+    with pytest.raises(ValueError, match="no replays"):
+        html([])
+    with pytest.raises(ReplayError):
+        html([edited(good, lambda r: r["collisions"].pop())])
+
+
+def test_write_html(tmp_path, good):
+    write_html([good], tmp_path / "page.html")
+    assert embedded((tmp_path / "page.html").read_text()) == [good]
+
+
+def flat(points):
+    return [v for p in points for v in p]
+
+
+NODE = shutil.which("node")
+needs_node = pytest.mark.skipif(NODE is None and not os.environ.get("PATHFINDER_REQUIRE_NODE"),
+                                reason="node isn't installed (CI sets PATHFINDER_REQUIRE_NODE)")
+
+
+@needs_node
+def test_the_page_and_python_put_the_robots_in_the_same_places(good, tmp_path):
+    # player.js's positionsAt and plannedAt against positions_at and the plan, on a real run, at whole and fractional
+    # times, before the start and after the end.
+    times = [-1, 0, 0.25, 0.5, 1, 2.75, len(good["delayed"]) / 2, len(good["delayed"]) - 0.1, len(good["delayed"]),
+             len(good["delayed"]) + 3]
+    (tmp_path / "replay.json").write_text(dumps(good))
+    script = f"""
+        const p = require({json.dumps(str(VIEWER / "player.js"))});
+        const r = JSON.parse(require("fs").readFileSync({json.dumps(str(tmp_path / "replay.json"))}, "utf8"));
+        const times = {json.dumps(times)};
+        console.log(JSON.stringify(times.map((t) => [p.positionsAt(r, t), p.plannedAt(r, t), p.delayedAt(r, t)])));
+    """
+    out = subprocess.run([NODE or "node", "-e", script], capture_output=True, text=True, check=True).stdout
+    width = good["map"]["width"]
+    for t, (positions, planned, delayed) in zip(times, json.loads(out)):
+        assert flat(positions) == pytest.approx(flat(positions_at(good, t)), abs=1e-9)
+        expected = []
+        for path in good["plan"]:
+            tt = max(t, 0)
+            a, b = path[min(int(tt), len(path) - 1)], path[min(int(tt) + 1, len(path) - 1)]
+            f = tt - int(tt)
+            expected.append([a % width + (b % width - a % width) * f, a // width + (b // width - a // width) * f])
+        assert flat(planned) == pytest.approx(flat(expected), abs=1e-9)
+        assert delayed == (good["delayed"][int(t)] if 0 <= t < len(good["delayed"]) else [])

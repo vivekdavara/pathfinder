@@ -25,6 +25,8 @@ jobs:
     env:
       CXX: ${{ matrix.cxx }}
       HOMEBREW_NO_AUTO_UPDATE: 1
+      # The runners come with Node; without it the viewer's JavaScript tests would be skipped, so require it.
+      PATHFINDER_REQUIRE_NODE: 1
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v6

@@ -9,6 +9,7 @@ replay viewer (day 5)").
     replay = record(instance, result.plan, policy="ordered", delays=random_delays(0.05, seed=1), planner="cbs")
     save(replay, "run.json")
     load("run.json") == replay          # load() checks the file before returning it
+    write_html([replay], "run.html")    # one self-contained page that plays it: open it in a browser
 
 A replay holds the map, the robots' starts and goals, the plan, what the robots drove (one cell per robot per time
 step), who was delayed at each step, the collisions the simulator recorded and the run's summary. The simulator is
@@ -269,6 +270,43 @@ def save(replay: dict[str, Any], path: str | Path) -> None:
 
 def load(path: str | Path) -> dict[str, Any]:
     return loads(Path(path).read_text(encoding="utf-8"))
+
+
+# --- the viewer page ---
+
+VIEWER = Path(__file__).resolve().parent / "viewer"
+
+
+def _script_safe(text: str) -> str:
+    """JSON text that can sit inside a <script> element: ``<``, ``>`` and ``&`` only appear inside JSON strings, where
+    their \\u escapes mean the same thing, and without them no ``</script>`` or ``<!--`` in a title can end or change the
+    element. (U+2028 and U+2029 are escaped too, for older JavaScript parsers.)"""
+    for c, escape in (("<", "\\u003c"), (">", "\\u003e"), ("&", "\\u0026"), ("\u2028", "\\u2028"),
+                      ("\u2029", "\\u2029")):
+        text = text.replace(c, escape)
+    return text
+
+
+def html(replays: Sequence[dict[str, Any]]) -> str:
+    """One self-contained page (viewer/viewer.html with viewer/player.js inlined) that plays the replays side by side
+    on one timeline. Each replay is checked first."""
+    if not replays:
+        raise ValueError("no replays to show")
+    for replay in replays:
+        check(replay)
+    template = (VIEWER / "viewer.html").read_text(encoding="utf-8")
+    player = (VIEWER / "player.js").read_text(encoding="utf-8")
+    if "</script" in player.lower():
+        raise RuntimeError("player.js can't be inlined: it contains </script")
+    # Split the template first, so a placeholder's text inside a replay (in a title, say) is never replaced.
+    before, rest = template.split("/*REPLAYS*/")
+    middle, after = rest.split("/*PLAYER*/")
+    data = _script_safe(json.dumps(list(replays), separators=(",", ":"), allow_nan=False))
+    return before + data + middle + player + after
+
+
+def write_html(replays: Sequence[dict[str, Any]], path: str | Path) -> None:
+    Path(path).write_text(html(replays), encoding="utf-8")
 
 
 def positions_at(replay: dict[str, Any], time: float) -> list[tuple[float, float]]:
