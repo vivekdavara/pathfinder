@@ -309,19 +309,76 @@ def write_html(replays: Sequence[dict[str, Any]], path: str | Path) -> None:
     Path(path).write_text(html(replays), encoding="utf-8")
 
 
-def positions_at(replay: dict[str, Any], time: float) -> list[tuple[float, float]]:
-    """Every robot's (x, y) at a moment of the run, cell centres at whole times and straight between them in a step
-    (the viewer's animation; the GIF renderer uses this too). ``time`` is clamped to the run."""
-    width = replay["map"]["width"]
+# --- a moment of the run (what viewer/player.js computes; tests/python/test_replay.py runs both and compares) ---
+
+def _step_of(replay: dict[str, Any], time: float) -> tuple[int, float]:
     steps = len(replay["delayed"])
     time = min(max(time, 0.0), float(steps))
     t = min(math.floor(time), max(steps - 1, 0))
+    return t, time - t
+
+
+def _between(width: int, a: int, b: int, f: float) -> tuple[float, float]:
+    ax, ay = a % width, a // width
+    bx, by = b % width, b // width
+    return ax + (bx - ax) * f, ay + (by - ay) * f
+
+
+def positions_at(replay: dict[str, Any], time: float) -> list[tuple[float, float]]:
+    """Every robot's (x, y) at a moment of the run: cell centres at whole times, straight between them during a step.
+    ``time`` is clamped to the run."""
+    width = replay["map"]["width"]
+    t, f = _step_of(replay, time)
+    return [_between(width, p[t], p[t + 1] if t + 1 < len(p) else p[t], f) for p in replay["trajectories"]]
+
+
+def planned_at(replay: dict[str, Any], time: float) -> list[tuple[float, float]]:
+    """Where the plan has every robot at that moment, on the plan's clock (a robot past its path's end on its last
+    cell): the viewer's ghost, so the gap between a robot and its ghost is how far behind the delays have put it."""
+    width = replay["map"]["width"]
+    time = max(time, 0.0)
+    t = math.floor(time)
     f = time - t
-    out = []
-    for path in replay["trajectories"]:
-        a = path[t]
-        b = path[t + 1] if t + 1 < len(path) else a
-        ax, ay = a % width, a // width
-        bx, by = b % width, b // width
-        out.append((ax + (bx - ax) * f, ay + (by - ay) * f))
-    return out
+    return [_between(width, p[min(t, len(p) - 1)], p[min(t + 1, len(p) - 1)], f) for p in replay["plan"]]
+
+
+def delayed_at(replay: dict[str, Any], time: float) -> list[int]:
+    """The robots delayed in the step the moment falls in (none before the start or at or after the end)."""
+    if time < 0 or time >= len(replay["delayed"]):
+        return []
+    return list(replay["delayed"][math.floor(time)])
+
+
+def collisions_at(replay: dict[str, Any], time: float) -> list[dict[str, Any]]:
+    """The collisions to show at a moment: a vertex collision at time T from T - 0.5 to T + 0.5 (at the run's last
+    moment, to its end), a swap during its step."""
+    end = len(replay["delayed"])
+    shown = []
+    for c in replay["collisions"]:
+        if c["kind"] == "swap":
+            if c["time"] <= time < c["time"] + 1:
+                shown.append(c)
+        elif c["time"] - 0.5 <= time < (end + 1 if c["time"] == end else c["time"] + 0.5):
+            shown.append(c)
+    return shown
+
+
+def counts_at(replay: dict[str, Any], time: float) -> dict[str, int]:
+    """By a moment: robot-steps of delay in the steps begun, collisions reached (at their time), robots on their goals
+    for good (their cost reached)."""
+    delays = sum(len(d) for t, d in enumerate(replay["delayed"]) if t <= time)
+    collisions = sum(1 for c in replay["collisions"] if c["time"] <= time)
+    finished = 0
+    for path, robot in zip(replay["trajectories"], replay["robots"]):
+        goal = robot["goal"]
+        arrived = len(path) - 1
+        while arrived > 0 and path[arrived - 1] == goal:
+            arrived -= 1
+        if path[-1] == goal and arrived <= time:
+            finished += 1
+    return {"delays": delays, "collisions": collisions, "finished": finished}
+
+
+def robot_hue(i: int) -> float:
+    """Robot i's hue in degrees: spread by the golden angle, so neighbouring robots differ (player.js's robotHue)."""
+    return (i * 137.508) % 360

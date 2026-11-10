@@ -10,8 +10,9 @@ import subprocess
 import pytest
 
 import pathfinder as pf
-from pathfinder.replay import (FORMAT, VERSION, VIEWER, ReplayError, check, dumps, html, load, loads, map_rows,
-                               positions_at, record, save, write_html)
+from pathfinder.replay import (FORMAT, VERSION, VIEWER, ReplayError, check, collisions_at, counts_at, delayed_at,
+                               dumps, html, load, loads, map_rows, planned_at, positions_at, record, robot_hue, save,
+                               write_html)
 from pathfinder.simulator import Simulator, delay_robot, random_delays
 
 
@@ -325,27 +326,41 @@ needs_node = pytest.mark.skipif(NODE is None and not os.environ.get("PATHFINDER_
 
 
 @needs_node
-def test_the_page_and_python_put_the_robots_in_the_same_places(good, tmp_path):
-    # player.js's positionsAt and plannedAt against positions_at and the plan, on a real run, at whole and fractional
-    # times, before the start and after the end.
-    times = [-1, 0, 0.25, 0.5, 1, 2.75, len(good["delayed"]) / 2, len(good["delayed"]) - 0.1, len(good["delayed"]),
-             len(good["delayed"]) + 3]
+def test_the_page_and_python_agree_on_every_moment(good, tmp_path):
+    # player.js's positionsAt, plannedAt, delayedAt, collisionsAt, countsAt and robotHue against this module's, on a
+    # real run with delays and a collision, at whole and fractional times, before the start and after the end.
+    end = len(good["delayed"])
+    times = [-1, -0.5, 0, 0.25, 0.5, 1, 2.75, end / 2, end - 0.5, end - 0.1, end, end + 3]
+    times += [c["time"] + d for c in good["collisions"] for d in (-0.5, -0.01, 0, 0.49, 0.5)]
     (tmp_path / "replay.json").write_text(dumps(good))
     script = f"""
         const p = require({json.dumps(str(VIEWER / "player.js"))});
         const r = JSON.parse(require("fs").readFileSync({json.dumps(str(tmp_path / "replay.json"))}, "utf8"));
         const times = {json.dumps(times)};
-        console.log(JSON.stringify(times.map((t) => [p.positionsAt(r, t), p.plannedAt(r, t), p.delayedAt(r, t)])));
+        console.log(JSON.stringify({{
+          moments: times.map((t) => [p.positionsAt(r, t), p.plannedAt(r, t), p.delayedAt(r, t), p.collisionsAt(r, t),
+                                     p.countsAt(r, t)]),
+          hues: r.robots.map((_, i) => p.robotHue(i)),
+        }}));
     """
-    out = subprocess.run([NODE or "node", "-e", script], capture_output=True, text=True, check=True).stdout
-    width = good["map"]["width"]
-    for t, (positions, planned, delayed) in zip(times, json.loads(out)):
-        assert flat(positions) == pytest.approx(flat(positions_at(good, t)), abs=1e-9)
-        expected = []
-        for path in good["plan"]:
-            tt = max(t, 0)
-            a, b = path[min(int(tt), len(path) - 1)], path[min(int(tt) + 1, len(path) - 1)]
-            f = tt - int(tt)
-            expected.append([a % width + (b % width - a % width) * f, a // width + (b // width - a // width) * f])
-        assert flat(planned) == pytest.approx(flat(expected), abs=1e-9)
-        assert delayed == (good["delayed"][int(t)] if 0 <= t < len(good["delayed"]) else [])
+    out = json.loads(subprocess.run([NODE or "node", "-e", script], capture_output=True, text=True,
+                                    check=True).stdout)
+    for t, (positions, planned, delayed, collisions, counts) in zip(times, out["moments"]):
+        assert flat(positions) == pytest.approx(flat(positions_at(good, t)), abs=1e-9), t
+        assert flat(planned) == pytest.approx(flat(planned_at(good, t)), abs=1e-9), t
+        assert delayed == delayed_at(good, t), t
+        assert collisions == collisions_at(good, t), t
+        assert counts == counts_at(good, t), t
+    assert out["hues"] == pytest.approx([robot_hue(i) for i in range(len(good["robots"]))], abs=1e-9)
+    assert any(collisions_at(good, t) for t in times) and any(delayed_at(good, t) for t in times)
+
+
+def test_moments_of_the_corridor():
+    instance, plan = corridor()
+    r = record(instance, plan, "timetable", delay_robot(1, at=0, steps=1))
+    assert r["trajectories"] == [[0, 1, 2, 3, 3], [1, 1, 2, 3, 4]]
+    assert planned_at(r, 0.5) == [(0.5, 0.0), (1.5, 0.0)] and planned_at(r, 9) == [(3.0, 0.0), (4.0, 0.0)]
+    assert delayed_at(r, 0.9) == [1] and delayed_at(r, 1) == [] and delayed_at(r, 4) == []
+    assert [c["time"] for c in collisions_at(r, 1.49)] == [1] and [c["time"] for c in collisions_at(r, 1.5)] == [2]
+    assert counts_at(r, 0) == {"delays": 1, "collisions": 0, "finished": 0}
+    assert counts_at(r, 4) == {"delays": 1, "collisions": 3, "finished": 2}
