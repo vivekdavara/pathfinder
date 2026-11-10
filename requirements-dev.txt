@@ -1,2 +1,4 @@
 # Python tools for the tests and experiments (the C++ build fetches its own dependencies).
 pytest==9.1.1
+# Pillow writes the replay GIFs (pathfinder.render); nothing else needs it.
+pillow==13.0.0

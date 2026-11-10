@@ -148,6 +148,10 @@ function asReplays(doc) {
   return list;
 }
 
+function count(n, what) {
+  return `${n} ${what}${n === 1 ? "" : "s"}`;
+}
+
 function label(replay) {
   const parts = [replay.policy];
   if (replay.planner) parts.unshift(replay.planner.toUpperCase());
@@ -270,8 +274,8 @@ function startPage() {
       const panel = panels.children[k];
       drawReplay(panel.querySelector("canvas"), replay, state.time, cellSize(replay));
       const c = countsAt(replay, state.time);
-      panel.querySelector(".counts").textContent =
-        `${c.finished}/${replay.robots.length} robots done · ${c.delays} delay steps · ${c.collisions} collisions`;
+      panel.querySelector(".counts").textContent = `${c.finished}/${replay.robots.length} robots done · ` +
+        `${count(c.delays, "delay step")} · ${count(c.collisions, "collision")}`;
     });
   }
 
@@ -365,5 +369,5 @@ if (typeof document !== "undefined") {
 
 if (typeof module !== "undefined") {
   module.exports = { positionsAt, plannedAt, delayedAt, collisionsAt, countsAt, robotHue, shapeProblems, asReplays,
-                     stepOf, label };
+                     stepOf, label, count };
 }

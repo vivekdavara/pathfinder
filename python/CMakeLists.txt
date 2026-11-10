@@ -14,6 +14,7 @@ configure_file(pathfinder/__init__.py ${package_dir}/__init__.py COPYONLY)
 # The pure-Python parts of the package, next to it.
 configure_file(pathfinder/simulator.py ${package_dir}/simulator.py COPYONLY)
 configure_file(pathfinder/replay.py ${package_dir}/replay.py COPYONLY)
+configure_file(pathfinder/render.py ${package_dir}/render.py COPYONLY)
 # The replay viewer's page and script, which pathfinder.replay.html() inlines.
 configure_file(pathfinder/viewer/viewer.html ${package_dir}/viewer/viewer.html COPYONLY)
 configure_file(pathfinder/viewer/player.js ${package_dir}/viewer/player.js COPYONLY)
@@ -43,11 +44,12 @@ if(PATHFINDER_BUILD_TESTS)
     COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/delays.py --map generated-warehouse --agents 8
       --scenarios 1-3 --seeds 3 --time-limit 2)
   set_tests_properties(python.delays PROPERTIES ENVIRONMENT "PYTHONPATH=${PROJECT_BINARY_DIR}/python")
-  # The replay script on the generated floor: a plan, both policies under the same delays, the page and the JSON.
+  # The replay script on the generated floor: a plan, both policies under the same delays, the page, the JSON and
+  # the GIF (Pillow is in requirements-dev.txt).
   add_test(NAME python.replay
     COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/replay.py --agents 12 --scenario 3
       --delay-probability 0.1 --seed 4 --html ${PROJECT_BINARY_DIR}/replay-test.html
-      --json ${PROJECT_BINARY_DIR}/replay-test)
+      --json ${PROJECT_BINARY_DIR}/replay-test --gif ${PROJECT_BINARY_DIR}/replay-test.gif --gif-substeps 2)
   set_tests_properties(python.replay PROPERTIES ENVIRONMENT "PYTHONPATH=${PROJECT_BINARY_DIR}/python")
   # The viewer's JavaScript (pathfinder/viewer/player.js) under Node's test runner, when Node is installed. CI sets
   # PATHFINDER_REQUIRE_NODE=1, so there a missing Node fails the configure step instead of skipping these tests.

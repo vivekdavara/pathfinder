@@ -170,4 +170,6 @@ test("a file holds one replay or a list", () => {
 test("labels", () => {
   assert.equal(player.label(corridor()), "timetable · corridor");
   assert.equal(player.label({ ...corridor(), planner: "cbs" }), "CBS · timetable · corridor");
+  assert.equal(player.count(1, "collision"), "1 collision");
+  assert.equal(player.count(0, "collision"), "0 collisions");
 });
