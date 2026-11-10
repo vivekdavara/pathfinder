@@ -241,13 +241,13 @@ The headline numbers, each from the day's section below, where its command, mach
 | What does a delay do to a plan run as a timetable? | At one robot-step of delay in a hundred, 53.5% of prioritized planning's runs collide and 23.5% of CBS's (warehouse-10-20-10-2-1, 20 agents, 460 runs each; 57.3% and 42.3% on random-32-32-20) | day 4 |
 | ...and executed in the plan's order? | Never a collision or a deadlock; each robot-step of delay costs the fleet 1.014 to 1.050 robot-steps on that map, 1.094 to 1.205 on the denser random-32-32-20 | day 4 |
 | How fast is the simulator? | 1.13 to 1.22 million robot-steps a second ordered, 1.68 to 1.87 million as a timetable | day 4 |
-| What does a replay cost? | 16 robots, 31 steps: recorded and checked in 1.2 to 1.4 ms, a 27.5 KiB page for two runs; 100 robots, 206 steps: 31.6 to 41.4 ms, 350 KiB | day 5 |
+| What does a replay cost? | 16 robots, 31 steps: recorded and checked in 1.4 to 1.5 ms, a 33.5 KiB page and a 234 KiB GIF for two runs; 100 robots, 206 steps: 42 to 56 ms, a 356 KiB page (load 5, another session alongside) | day 5 |
 | Tests | 204 CTest tests: the GoogleTest suites and the CLI script, 174 pytest tests (`python.pytest`, the viewer page in headless Chrome among them), 21 Node tests (`viewer.node`), the examples and scripts end to end; green on GCC 14, Clang 18, Apple Clang and under ASan + UBSan in CI | day 5 |
 
 ## Results (day 5)
 
 Measured on an Apple M3, macOS 26.6, Python 3.11.12, Pillow 13.0.0, Node 23.11.0, on AC, with another project's
-session running alongside (load average about 3.4): the times are indications; sizes, counts and collisions don't
+session running alongside (load average 3.4 to 5.5): the times are indications; sizes, counts and collisions don't
 depend on load. Every number comes from the command next to it.
 
 - **Tests**: 204 CTest tests (`ctest --preset dev -N`; 202 on day 4): new are `viewer.node` (21 Node tests of
@@ -280,10 +280,12 @@ depend on load. Every number comes from the command next to it.
   wrong partner when it was the second robot of a pair, and a link to a robot the runs don't have was only reported
   on the error line, which no test read. Final: 46 of 47 killed, the equivalent one left.
 - **Replays** (`scripts/replay.py`; [`results/day5/`](results/day5/README.md) has the commands and outputs): the
-  README's two 16-robot runs (31 steps) recorded and checked in 1.2 and 1.4 ms (a check alone 0.6 and 0.7 ms); their
-  page 27.5 KiB, their GIF 125 frames, 754.7 KiB, written in 0.21 s. On MovingAI maps with 100 robots (prioritized
-  planning, p = 0.05): empty-32-32 (53 steps) 8.4 and 10.7 ms, a 94.5 KiB page; warehouse-10-20-10-2-1 (206 steps)
-  31.6 and 41.4 ms, 350.1 KiB, and a 7.5 MiB GIF at 6 pixels a cell. The timetable runs had 77 and 132 collisions,
+  README's two 16-robot runs (31 steps) recorded and checked in 1.4 and 1.5 ms (a check alone 0.6 and 0.7 ms); their
+  page 33.5 KiB, their GIF 125 frames, 234.3 KiB (754.7 KiB before the palette was optimized; every frame's pixels
+  the same), written in 0.30 s. On MovingAI maps with 100 robots (prioritized planning, p = 0.05), load average 4.7
+  to 5.5: empty-32-32 (53 steps) 9.7 and 13.2 ms, a 100.5 KiB page, a 453.7 KiB GIF at 6 pixels a cell;
+  warehouse-10-20-10-2-1 (206 steps) 42.1 and 55.7 ms, 356.1 KiB, a 2.6 MiB GIF (7.5 MiB before; at load 3.4,
+  before the robot following was added, the same runs recorded in 31.6 and 41.4 ms). The timetable runs had 77 and 132 collisions,
   the ordered runs none.
 - **In a browser** (Chrome, the page opened from a file, by hand; `test_page_in_chrome.py` now automates the
   drawing and loading checks): no console errors; the collision ring at t = 18 and the
@@ -976,7 +978,7 @@ passes, each finding something:
 - The page checks only the shape of a replay file it is given (it can't run the simulator); replays written by the
   Python side have passed the full check. It has no zoom or pan, so big maps get small cells (6 px for the 161 x 63
   warehouse in a 1,024 px window), and it holds every replay in memory.
-- A GIF grows with the steps and the map: 7.5 MiB for two 206-step runs on the 161 x 63 warehouse at 6 px a cell.
+- A GIF grows with the steps and the map: 2.6 MiB for two 206-step runs on the 161 x 63 warehouse at 6 px a cell.
   The README's is of the small generated floor for that reason.
 - Replays show the two execution policies only; there is no replanning to show, and a delay is always a whole step.
 

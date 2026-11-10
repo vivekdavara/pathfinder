@@ -5,7 +5,9 @@ replay viewer (day 5)"). Needs Pillow (in requirements-dev.txt); nothing else in
     save_gif([timetable_replay, ordered_replay], "replay.gif", cell=14, substeps=4)
 
 Every frame is drawn in palette mode with one fixed palette (the page's colours, two shades per robot), so the
-colours are exact, the same in every frame, and the file stays small. What is drawn at a moment comes from
+colours are exact and the same in every frame. Saving with Pillow's ``optimize`` drops the palette entries no frame
+uses, so each pixel takes fewer bits: the README's GIF went from 754.7 KiB to 234.3 KiB with every frame's pixels
+unchanged (a test reads the frames back). What is drawn at a moment comes from
 pathfinder.replay's positions_at, planned_at, delayed_at, collisions_at and counts_at, which a test checks against
 the page's own functions.
 """
@@ -164,6 +166,6 @@ def save_gif(replays: Sequence[dict[str, Any]], path: str | Path, cell: int = 14
     # GIF frame delays are in hundredths of a second; Pillow rounds milliseconds down to them.
     each = max(20, round(1000 / (steps_per_second * substeps) / 10) * 10)
     durations = [each] * (len(images) - 1) + [each + round(hold * 1000 / 10) * 10]
-    images[0].save(path, save_all=True, append_images=images[1:], duration=durations, loop=0, optimize=False,
+    images[0].save(path, save_all=True, append_images=images[1:], duration=durations, loop=0, optimize=True,
                    disposal=1)
     return len(images)

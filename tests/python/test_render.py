@@ -120,6 +120,18 @@ def test_the_gif_loops_with_the_frame_delays(runs, tmp_path):
     assert set(durations[:-1]) == {50} and durations[-1] == 50 + 1500
 
 
+def test_the_gif_holds_exactly_the_frames_drawn(runs, tmp_path):
+    # Saving optimizes the palette; every frame read back must be the frame drawn, pixel for pixel.
+    path = tmp_path / "r.gif"
+    drawn = render.frames(list(runs), cell=CELL, substeps=2)
+    render.save_gif(list(runs), path, cell=CELL, substeps=2)
+    with Image.open(path) as gif:
+        assert gif.n_frames == len(drawn)
+        for k, frame in enumerate(drawn):
+            gif.seek(k)
+            assert gif.convert("RGB").tobytes() == frame.convert("RGB").tobytes(), k
+
+
 def test_the_renderer_refuses_what_it_cant_draw(runs, tmp_path):
     with pytest.raises(ValueError, match="no replays"):
         render.frames([])

@@ -389,8 +389,8 @@ the only place they can occur; so no title can contain `</script>` or `<!--` as 
 The template is split at its two placeholders before anything is inserted, so a placeholder's text inside a title is
 never replaced.
 
-**Why a static page and a GIF, not a server.** A replay is small (27.5 KiB for the README's two 16-robot runs, page
-included; 350 KiB for two 100-robot runs of 206 steps on the 161 × 63 MovingAI warehouse) and needs no computation
+**Why a static page and a GIF, not a server.** A replay is small (33.5 KiB for the README's two 16-robot runs, page
+included; 356 KiB for two 100-robot runs of 206 steps on the 161 × 63 MovingAI warehouse) and needs no computation
 the browser can't do, so a file is the simplest thing that works and that a reviewer can open from a download. The
 port reserved for a visualizer server (8115) stays unused.
 
