@@ -221,6 +221,11 @@ def test_an_invalid_plan_is_refused(good):
         r["map"]["rows"] = ["@" * r["map"]["width"]] * r["map"]["height"]
     refused(good, blocked, "instance")
 
+    def jump(r):
+        # A valid instance, but robot 0's plan jumps straight to its goal.
+        r["plan"][0] = [r["plan"][0][0], r["plan"][0][-1]]
+    refused(good, jump, "the plan isn't valid")
+
 
 def test_the_shape_is_checked(good):
     refused(good, lambda r: r.pop("summary"), "wrong keys")
@@ -234,6 +239,10 @@ def test_the_shape_is_checked(good):
     refused(good, lambda r: r["trajectories"][0].pop(), r"trajectories\[0\]")
     refused(good, lambda r: r["robots"][0].update(start=10 ** 9), r"robots\[0\].start")
     refused(good, lambda r: r["delayed"].append([]), r"trajectories\[0\]")
+    refused(good, lambda r: r.update(robots={}), "robots must be a list")
+    refused(good, lambda r: r.update(title=None), "title must be a string")
+    refused(good, lambda r: r.update(planner=3), "planner must be a string")
+    refused(good, lambda r: r["plan"].__setitem__(0, []), r"plan\[0\] is empty")
 
 
 def test_unsorted_delays_and_delays_after_the_end_are_refused():
@@ -316,6 +325,15 @@ def test_the_page_refuses_bad_replays(good):
         html([])
     with pytest.raises(ReplayError):
         html([edited(good, lambda r: r["collisions"].pop())])
+
+
+def test_a_player_that_would_end_its_script_element_is_refused(good, tmp_path, monkeypatch):
+    import pathfinder.replay as replay_module
+    (tmp_path / "viewer.html").write_text((VIEWER / "viewer.html").read_text())
+    (tmp_path / "player.js").write_text('const s = "</SCRIPT>";')
+    monkeypatch.setattr(replay_module, "VIEWER", tmp_path)
+    with pytest.raises(RuntimeError, match="can't be inlined"):
+        replay_module.html([good])
 
 
 def test_write_html(tmp_path, good):

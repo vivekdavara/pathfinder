@@ -85,7 +85,8 @@ def test_replay_writes_the_page_the_runs_and_the_gif(tmp_path, capsys):
     from pathfinder.replay import loads
 
     args = ["--agents", "12", "--scenario", "3", "--delay-probability", "0.1", "--seed", "4",
-            "--html", str(tmp_path / "r.html"), "--json", str(tmp_path / "r"), "--gif-substeps", "1"]
+            "--html", str(tmp_path / "r.html"), "--json", str(tmp_path / "r"), "--gif-substeps", "1",
+            "--gif-cell", "5"]
     try:
         import PIL  # noqa: F401
         args += ["--gif", str(tmp_path / "r.gif")]
@@ -122,6 +123,15 @@ def test_replay_on_a_movingai_map(tmp_path):
     assert replay_script.main(["--map", "nowhere", "--data", str(tmp_path), "--json", str(out)]) == 2
 
 
+def test_replay_with_prioritized_planning(tmp_path, capsys):
+    replay_script = load("replay")
+    assert replay_script.main(["--agents", "12", "--planner", "pp", "--policies", "timetable",
+                               "--json", str(tmp_path / "p")]) == 0
+    from pathfinder.replay import load as load_replay
+    assert load_replay(tmp_path / "p-timetable.json")["planner"] == "pp"
+    assert "pp plan SOC" in capsys.readouterr().out
+
+
 def test_replay_exits_1_when_the_planner_fails(tmp_path, capsys):
     replay_script = load("replay")
     assert replay_script.main(["--agents", "16", "--scenario", "1", "--time-limit", "1e-9",
@@ -133,6 +143,7 @@ def test_replay_exits_1_when_the_planner_fails(tmp_path, capsys):
     [],                                                       # nothing to write
     ["--at", "3"],                                            # --at without --delay-robot
     ["--steps", "2"],
+    ["--delay-robot", "1", "--at", "-1"],
     ["--delay-robot", "99"],                                  # there are 12 robots
     ["--delay-robot", "1", "--delay-probability", "0.1"],    # one kind of delays or the other
     ["--delay-probability", "nan"],
