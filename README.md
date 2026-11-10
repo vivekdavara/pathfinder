@@ -3,16 +3,32 @@
 Collision-free paths for many robots on a grid warehouse map at once: multi-agent path finding (MAPF) by
 conflict-based search, against prioritized planning as the baseline, in C++20 with Python bindings for experiments.
 
-**Status: day 4 of 5.** Built so far: the specification ([DESIGN.md](DESIGN.md)), the grid, the MovingAI map and
+**Status: v1.0.0 (day 5 of 5).** Built: the specification ([DESIGN.md](DESIGN.md)), the grid, the MovingAI map and
 scenario formats, a plan file format, seeded map and scenario generators (random and warehouse floors), BFS and
-octile distances, the plan validator every planner is tested against, a CLI, the Python module, a script that
-fetches the MovingAI MAPF benchmark set, and CI (day 1); then space-time A\* with a reservation table, checked against
-a brute-force oracle, and prioritized planning, the baseline planner, in the library, the CLI (`pathfinder plan`)
-and Python (day 2); then conflict-based search, which returns plans of minimum sum of costs, checked against a
-brute-force optimum, with a fast conflict scanner, in the library, the CLI (`--planner cbs`) and Python (day 3);
-then a step-by-step simulator that executes plans with robots delayed, two ways (as a timetable, and in the plan's
-order of visits to each cell, which can't collide), and the benchmarks: both planners across agent counts on four
-MovingAI maps, and what delays do to their plans (day 4). Next: a replay visualizer and v1.0.0 (day 5).
+octile distances, the plan validator every planner is tested against, a CLI, the Python module, a script that fetches
+the MovingAI MAPF benchmark set, and CI (day 1); space-time A\* with a reservation table, checked against a
+brute-force oracle, and prioritized planning, the baseline (day 2); conflict-based search, which returns plans of
+minimum sum of costs, checked against a brute-force optimum, with a fast conflict scanner (day 3); a step-by-step
+simulator that executes plans with robots delayed, as a timetable and in the plan's order of visits to each cell
+(which can't collide), and the benchmarks: both planners across agent counts on four MovingAI maps, and what delays do
+to their plans (day 4); and replays: a run recorded as JSON and checked by running it again, a self-contained page
+that plays runs side by side, and GIFs (day 5). [CHANGELOG.md](CHANGELOG.md) lists what v1.0.0 contains.
+
+![The same CBS plan for 16 robots, executed under the same random delays as a timetable (left, 6 collisions) and in
+the plan's order (right, none)](results/day5/warehouse-16.gif)
+
+*One CBS plan for 16 robots on the generated warehouse floor (synthetic), executed twice under the same random
+delays (each robot held for a step with probability 0.1 at every step). Left, as a timetable: a delayed robot falls
+behind and the others drive on, so robots collide (red ring), 6 times. Right, ordered: each cell is entered in the
+plan's order, so robots wait their turn instead: no collisions, for 5 more robot-steps of cost in all (265 against
+260, and the plan's 232). Dashed rings: where the plan has each robot at that moment; amber: delayed in this step;
+squares: goals. The same runs as a page to download and open: [`results/day5/warehouse-16.html`](results/day5/);
+the command: [`results/day5/README.md`](results/day5/README.md).*
+
+**Reading order.** [WALKTHROUGH.md](WALKTHROUGH.md) "In two minutes", then this README's "Results at v1.0.0"; then
+the code in the order the data flows: `include/pathfinder/plan.hpp` (`validate`), `src/space_time_astar.cpp`,
+`src/prioritized.cpp`, `src/cbs.cpp`, `python/pathfinder/simulator.py`, `python/pathfinder/replay.py`; DESIGN.md has
+the rules each one implements.
 
 ## Why
 
@@ -58,6 +74,9 @@ flowchart LR
   PY --> SIM["simulator<br/>(timetable, ordered; day 4)"]
   PY --> EXP["sweep and delay<br/>experiments (day 4)"]
   SIM --> EXP
+  SIM -- "each step" --> REC["replay record<br/>(JSON, checked by<br/>running it again; day 5)"]
+  REC --> PAGE["viewer page<br/>(player.js, one file)"]
+  REC --> GIF["GIFs<br/>(Pillow)"]
 ```
 
 ## Layout
@@ -76,20 +95,23 @@ flowchart LR
 | `include/pathfinder/planner.hpp`, `src/planner_common.hpp`, `src/prioritized.cpp`, `src/cbs.cpp` | the planners' limits and result, what they check the same way; prioritized planning; CBS |
 | `include/pathfinder/conflicts.hpp`, `src/conflicts.cpp` | the conflict scanner: a plan's conflicts, counted, and the earliest (what CBS splits on) |
 | `tools/pathfinder_cli.cpp` | the `pathfinder` command |
-| `python/` | the pybind11 module `pathfinder._core` and the `pathfinder` package, with `pathfinder/simulator.py` (day 4) |
-| `tests/` | GoogleTest suites, `cli_test.sh`, `python/` (pytest), `data/` (small hand-written files), `review/` (the review's tests) |
-| `scripts/` | `fetch_maps.py` (the benchmark set), `check_maps.sh`, `gcc_check.sh`, `pp_sweep.py` (prioritized planning on the benchmark maps, day 2), `sweep.py` (both planners across agent counts), `sweep_summary.py` (its records as one table), `delays.py` (plans executed under delays) |
+| `python/` | the pybind11 module `pathfinder._core` and the `pathfinder` package, with `pathfinder/simulator.py` (day 4), `pathfinder/replay.py` (the replay record, its check, the page; day 5), `pathfinder/render.py` (GIFs) and `pathfinder/viewer/` (the page and `player.js`) |
+| `tests/` | GoogleTest suites, `cli_test.sh`, `python/` (pytest), `viewer/` (Node tests of `player.js`), `data/` (small hand-written files), `review/` (the review's tests) |
+| `scripts/` | `fetch_maps.py` (the benchmark set), `check_maps.sh`, `gcc_check.sh`, `pp_sweep.py` (prioritized planning on the benchmark maps, day 2), `sweep.py` (both planners across agent counts), `sweep_summary.py` (its records as one table), `delays.py` (plans executed under delays), `replay.py` (one instance planned, executed with each policy, written as a page, JSON and a GIF; day 5) |
 | `examples/` | `independent_paths.py`: each agent's shortest path alone, and the conflicts the validator finds; `prioritized_vs_independent.py`: the same floor planned both ways, and where prioritized planning stops |
 | `bench/` | the Google Benchmark suite (`make bench`) |
 | `results/day4/` | the day-4 sweeps' records (JSONL) and the experiments' printed tables, with the commands ([README](results/day4/README.md)) |
+| `results/day5/` | the README's animation, the same runs as a page, and the replay script's output ([README](results/day5/README.md)) |
 
 ## How to run
 
-Needs CMake 3.25+, Ninja, a C++20 compiler (Apple Clang 21, GCC 14 and Clang 18 are the targets) and Python 3.11+.
+Needs CMake 3.25+, Ninja, a C++20 compiler (Apple Clang 21, GCC 14 and Clang 18 are the targets) and Python 3.11+;
+Node.js runs the viewer's JavaScript tests when it is installed (23.11 here; CI requires it, with the runners' own).
 CMake fetches GoogleTest 1.18.0 and pybind11 3.0.4 itself, as release tarballs pinned by SHA-256.
 
 ```bash
-make check          # .venv with pytest, Debug build with warnings as errors, every test (GoogleTest, CLI, pytest)
+make check          # .venv with pytest and Pillow, Debug build with warnings as errors, every test (GoogleTest, CLI,
+                    # pytest, the viewer's Node tests)
 make release        # the same on the optimised build
 make asan           # the C++ tests under AddressSanitizer and UndefinedBehaviorSanitizer
 make coverage       # line and branch coverage of the library by the C++ and CLI tests (Clang)
@@ -166,6 +188,30 @@ The day-4 experiments (both need `make maps release` first, and `PYTHONPATH=buil
   --probabilities 0.01 0.05 0.1 0.2 --seeds 20 --single 1 3 5 --time-limit 5
 ```
 
+The replay viewer (day 5): plan one instance, execute the plan with both policies under the same delays, and write
+the runs as one page (open it in any browser: play, pause, step, scrub; or open another replay JSON file), as replay
+JSON files, and as a GIF:
+
+```bash
+PYTHONPATH=build/release/python .venv/bin/python scripts/replay.py --agents 16 --scenario 1 \
+  --delay-probability 0.1 --seed 1 --html replay.html --json replay --gif replay.gif
+PYTHONPATH=build/release/python .venv/bin/python scripts/replay.py --map warehouse-10-20-10-2-1 --agents 100 \
+  --planner pp --delay-robot 3 --at 20 --steps 10 --html big.html     # MovingAI maps after `make maps`
+```
+
+From Python:
+
+```python
+from pathfinder.replay import record, save, load, write_html
+from pathfinder.render import save_gif                  # needs Pillow (requirements-dev.txt)
+
+runs = [record(inst, r.plan, policy, random_delays(0.05, seed=1), planner="pp")
+        for policy in ("timetable", "ordered")]          # r: the prioritized plan above
+write_html(runs, "runs.html")                            # one self-contained file
+save(runs[1], "ordered.json"); load("ordered.json")      # load() checks it by running it again
+save_gif(runs, "runs.gif", cell=14, substeps=4)
+```
+
 `examples/independent_paths.py` shows why a planner is needed: it gives each agent its own shortest path, ignoring
 the others, and validates the result. With 40 agents on the default warehouse floor (204 free cells; seed 7) every
 path is legal and shortest, so the sum of costs, 591, is the lower bound CBS starts from, and the plan has 83 vertex
@@ -177,6 +223,57 @@ paths have a sum of costs of 435 (the lower bound) and 51 conflicts; prioritized
 (26% over the bound), makespan 34, 3,620 expansions; and taking the first k agents of one 102-agent scenario,
 prioritized planning first fails at 43 agents, in either order (`PYTHONPATH=build/dev/python .venv/bin/python
 examples/prioritized_vs_independent.py --agents 30 --seed 1`; CTest: `python.example.prioritized`).
+
+## Results at v1.0.0
+
+The headline numbers, each from the day's section below, where its command, machine and conditions are:
+
+| Question | Measured | Section |
+|---|---|---|
+| Is CBS's plan optimal? | Its SOC equals a brute-force optimum (Dijkstra over joint states) on all 1,115 of 1,148 solvable tiny instances it finishes within 3,000 nodes; prioritized planning is above the optimum on 113 of them and fails on 241 | day 3 |
+| Where does CBS stop finishing (5 s a try, 25 scenarios)? | From 24 or 25 of 25 at 10 agents to 0 of 25 at 80 on empty-32-32, 50 on random-32-32-20, 30 on room-32-32-4, 60 on warehouse-10-20-10-2-1; bimodal: 228 of its 269 solves took under 10 ms | day 4 |
+| What does prioritized planning give up? | +0.5% to +11.6% mean SOC over CBS's on the instances both solve, at most +22.6% | day 4 |
+| How far does prioritized planning go? | 25 of 25 at 150 agents on empty-32-32, 22 at 200, 0 at 400; median under 20 ms through 100 agents on every map; it fails on choke points (room-32-32-4: 1 of 25 at 100) | day 4 |
+| What does a delay do to a plan run as a timetable? | At one robot-step of delay in a hundred, 53.5% of prioritized planning's runs collide and 23.5% of CBS's (warehouse-10-20-10-2-1, 20 agents, 460 runs each; 57.3% and 42.3% on random-32-32-20) | day 4 |
+| ...and executed in the plan's order? | Never a collision or a deadlock; each robot-step of delay costs the fleet 1.014 to 1.050 robot-steps on that map, 1.094 to 1.205 on the denser random-32-32-20 | day 4 |
+| How fast is the simulator? | 1.13 to 1.22 million robot-steps a second ordered, 1.68 to 1.87 million as a timetable | day 4 |
+| What does a replay cost? | 16 robots, 31 steps: recorded and checked in 1.2 to 1.4 ms, a 27.5 KiB page for two runs; 100 robots, 206 steps: 31.6 to 41.4 ms, 350 KiB | day 5 |
+| Tests | 204 CTest tests: the GoogleTest suites and the CLI script, 160 pytest tests (`python.pytest`), 15 Node tests (`viewer.node`), the examples and scripts end to end; green on GCC 14, Clang 18, Apple Clang and under ASan + UBSan in CI | day 5 |
+
+## Results (day 5)
+
+Measured on an Apple M3, macOS 26.6, Python 3.11.12, Pillow 13.0.0, Node 23.11.0, on AC, with another project's
+session running alongside (load average about 3.4): the times are indications; sizes, counts and collisions don't
+depend on load. Every number comes from the command next to it.
+
+- **Tests**: 204 CTest tests (`ctest --preset dev -N`; 202 on day 4): new are `viewer.node` (15 Node tests of
+  `player.js`'s pure functions: positions, the plan's ghosts, delays, the collision windows, counts, colours, the
+  shape check) and `python.replay` (the script end to end, writing the page, the JSON and a GIF); `python.pytest`
+  holds 160 pytest tests (97 on day 4): `test_replay.py` 36 (the record is the simulator's run; every kind of edit
+  `check()` must refuse; strict JSON; the page's embedding; Node against Python on every moment of a real run),
+  `test_render.py` 9 (each robot's centre pixel in its colour, the amber ring, red only in the run with collisions,
+  a real timetable swap drawn as a bar, the GIF's loop and frame delays read back), `test_scripts.py` 23 (5 on
+  day 4). Branch coverage under the pytest suite (coverage.py 7.17.2 in a scratch venv, not a project dependency:
+  `coverage run --branch --include='*/pathfinder/replay.py,*/pathfinder/render.py,*/scripts/replay.py' -m pytest
+  tests/python`): `replay.py` 100% of lines and branches, `render.py` 99%, `scripts/replay.py` 98% (its `__main__`
+  line is CTest's).
+- **Mutation check** (`.scratch/mutate_d5.py`, not committed: 38 mutants of `replay.py`, `render.py` and
+  `player.js`, each against the three pytest files and the Node tests, every file restored from a copy and compared
+  afterwards): 32 killed at first. Of the 6 survivors, 2 were test gaps (`summary.steps` never edited by a test; a
+  robot that starts on its goal counted done a step late), 3 were code that did nothing (a special case for a
+  collision at the run's last moment, in both languages, which the window already covered; a second check of
+  `summary.completed`), removed in `badd88e`, and 1 is equivalent (which step the end of a run falls in, where a
+  guard gives the same positions). After: 36 of 37 killed.
+- **Replays** (`scripts/replay.py`; [`results/day5/`](results/day5/README.md) has the commands and outputs): the
+  README's two 16-robot runs (31 steps) recorded and checked in 1.2 and 1.4 ms (a check alone 0.6 and 0.7 ms); their
+  page 27.5 KiB, their GIF 125 frames, 754.7 KiB, written in 0.21 s. On MovingAI maps with 100 robots (prioritized
+  planning, p = 0.05): empty-32-32 (53 steps) 8.4 and 10.7 ms, a 94.5 KiB page; warehouse-10-20-10-2-1 (206 steps)
+  31.6 and 41.4 ms, 350.1 KiB, and a 7.5 MiB GIF at 6 pixels a cell. The timetable runs had 77 and 132 collisions,
+  the ordered runs none.
+- **In a browser** (Chrome, the page opened from a file): no console errors; the collision ring at t = 18 and the
+  plan's ghosts trailing delayed robots where the replay puts them; Play, then Space pauses once, the right arrow
+  steps once; maps 1.6 times wider than tall are stacked, so the 161 x 63 warehouse gets 6 px cells instead of 3 and
+  the 27 x 12 floor 35 px.
 
 ## Results (day 4)
 
@@ -752,6 +849,23 @@ the same planners unchecked (0 or inf still meant no limit there), and `sweep.py
 It re-ran `sweep_summary.py` on the committed records: `summary.md` unchanged. Rounds 2 and 3 each found a case the
 fix before had missed; no round found a bug in the simulator.
 
+## Review of day 5
+
+No review agent ran today. The session started five hours late (the Mac slept from 10:12 to 15:01 with this run
+open), at the same time as the other track's session, which runs review agents of its own; on an earlier day two
+agents and a session together hit the account's usage limit and stalled both runs. So the review was mine, in three
+passes, each finding something:
+
+- **Reading it over** (`9d5912a`): `scripts/replay.py` ignored `--at` and `--steps` without `--delay-robot`, sent
+  `--gif-cell 3` through to a traceback, and printed a traceback for a map it couldn't open; the page toggled play
+  twice on Space with the Play button focused. Each has a test (the key in a browser).
+- **Mutations** (`badd88e`): two test gaps and dead code in both languages, above.
+- **Coverage** (`599d230`): no test had a valid instance with an invalid plan (each earlier plan edit broke the
+  instance first), and five refusals had no test.
+- And one claim of mine, caught before it was committed: a test comment said simulator runs never contain a swap.
+  Timetable runs do (day 4 counted them), so the test now draws a real one (prioritized planning, 8 agents, scenario
+  seed 2, delays seed 1: robots 3 and 7 swap cells 12 and 11 between times 6 and 7).
+
 ## Design decisions
 
 - **Strict parsers.** A short row, a duplicate header field or an unknown character is an error naming its line, never
@@ -800,6 +914,15 @@ fix before had missed; no round found a bug in the simulator.
   expansions go to the JSONL too, for comparisons that don't depend on the machine.
 - **Paired comparisons only** (day 4): SOC ratios are over the instances both planners solve, and the delay experiment
   uses only those instances, so a planner isn't flattered by solving only the easy ones.
+- **A replay is checked by running it again** (day 5): the simulator is deterministic given the plan and each step's
+  delays, so `check()` re-executes the plan with the recorded delays and requires the same positions, collisions and
+  summary, instead of re-deriving each rule; a replay that passes is a run the simulator really makes.
+- **One set of drawing rules in two languages, compared by a test** (day 5): the page needs them in JavaScript, the
+  GIF in Python; a test runs `player.js` under Node on a real run and compares every value with the Python side,
+  rather than trusting two copies to agree.
+- **A file, not a server** (day 5): a replay is small and needs nothing the browser can't compute, so the viewer is
+  one self-contained HTML file (script and data inlined, nothing fetched) that opens from a download; the README
+  gets a GIF because GitHub shows images and runs no script.
 - **The benchmark set is fetched, not committed**, and checked by SHA-256 before anything is unpacked; the unpacker
   writes only `.map`/`.scen` files to plain paths under `data/`.
 
@@ -827,6 +950,13 @@ fix before had missed; no round found a bug in the simulator.
   folded into those two (the MAPF maps use only `.`, `@` and `T`).
 - `random_scenario` and `pathfinder check` run one octile (Dijkstra) search per agent, stopped at its goal, which is
   still slow for many agents on the largest maps (orz900d, 1,491 x 656).
+
+- The page checks only the shape of a replay file it is given (it can't run the simulator); replays written by the
+  Python side have passed the full check. It has no zoom or pan, so big maps get small cells (6 px for the 161 x 63
+  warehouse in a 1,024 px window), and it holds every replay in memory.
+- A GIF grows with the steps and the map: 7.5 MiB for two 206-step runs on the 161 x 63 warehouse at 6 px a cell.
+  The README's is of the small generated floor for that reason.
+- Replays show the two execution policies only; there is no replanning to show, and a delay is always a whole step.
 
 ## Data and license
 
