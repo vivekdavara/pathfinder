@@ -185,13 +185,17 @@ class Simulator:
         self._delay_steps += len(held)
         return Step(self.time, tuple(sorted(moved)), tuple(sorted(held)), tuple(found))
 
-    def run(self, delays: DelaySchedule | None = None, max_steps: int | None = None) -> Execution:
+    def run(self, delays: DelaySchedule | None = None, max_steps: int | None = None,
+            on_step: Callable[[Step], object] | None = None) -> Execution:
         """Steps until every robot is finished, or ``max_steps`` steps have been executed in all (default: no bound for
-        a run without delays, which always finishes; with them, ten times the longest path's length plus 1,000)."""
+        a run without delays, which always finishes; with them, ten times the longest path's length plus 1,000).
+        ``on_step`` is called with each :class:`Step` as it is made (the replay recorder uses it)."""
         if max_steps is None and delays is not None:
             max_steps = 10 * max((len(p) for p in self._paths), default=0) + 1000
         while not self.done and (max_steps is None or self.time < max_steps):
-            self.step(delays(self.time, self) if delays is not None else ())
+            step = self.step(delays(self.time, self) if delays is not None else ())
+            if on_step is not None:
+                on_step(step)
         return self.execution()
 
     def execution(self) -> Execution:
