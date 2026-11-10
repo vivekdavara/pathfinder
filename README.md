@@ -242,7 +242,7 @@ The headline numbers, each from the day's section below, where its command, mach
 | ...and executed in the plan's order? | Never a collision or a deadlock; each robot-step of delay costs the fleet 1.014 to 1.050 robot-steps on that map, 1.094 to 1.205 on the denser random-32-32-20 | day 4 |
 | How fast is the simulator? | 1.13 to 1.22 million robot-steps a second ordered, 1.68 to 1.87 million as a timetable | day 4 |
 | What does a replay cost? | 16 robots, 31 steps: recorded and checked in 1.4 to 1.5 ms, a 33.5 KiB page and a 234 KiB GIF for two runs; 100 robots, 206 steps: 42 to 56 ms, a 356 KiB page (load 5, another session alongside) | day 5 |
-| Tests | 204 CTest tests: the GoogleTest suites and the CLI script, 175 pytest tests (`python.pytest`, the viewer page in headless Chrome among them), 21 Node tests (`viewer.node`), the examples and scripts end to end; green on GCC 14, Clang 18, Apple Clang and under ASan + UBSan in CI | day 5 |
+| Tests | 204 CTest tests: the GoogleTest suites and the CLI script, 177 pytest tests (`python.pytest`, the viewer page in headless Chrome among them), 21 Node tests (`viewer.node`), the examples and scripts end to end; green on GCC 14, Clang 18, Apple Clang and under ASan + UBSan in CI | day 5 |
 
 ## Results (day 5)
 
@@ -254,15 +254,16 @@ depend on load. Every number comes from the command next to it.
   `player.js`'s pure functions: positions, the plan's ghosts, delays, the collision windows, counts, colours, the
   shape check, links, the robot under a point, a robot's summary, captions; and a property: 3,000 random
   corruptions, every one the shape check accepts computed on without an exception) and `python.replay` (the script
-  end to end, writing the page, the JSON and a GIF); `python.pytest` holds 175 pytest tests (97 on day 4):
+  end to end, writing the page, the JSON and a GIF); `python.pytest` holds 177 pytest tests (97 on day 4):
   `test_page_in_chrome.py` 11 (the page loaded in headless Chrome: the clock, each run's counts, robot lines and
   error line as the script left them; a probe reading the canvas at every robot's position and inside a collision's
   ring; links to a moment and a robot; click events on the canvas selecting a robot and clearing it; three hand
   mutations of the drawing code each fail it), `test_replay.py` 38 (the record is the simulator's run; every kind
   of edit `check()` must refuse, and 400 random single edits of a real run under each policy, all refused; strict
-  JSON; the page's embedding; Node against Python on every moment of a real run), `test_render.py` 10 (each robot's
+  JSON; the page's embedding; Node against Python on every moment of a real run), `test_render.py` 12 (each robot's
   centre pixel in its colour, the amber ring, red only in the run with collisions, a real timetable swap drawn as a
-  bar, the GIF's loop and frame delays read back, and every frame read back pixel for pixel), `test_scripts.py` 24 (5 on day 4; a `.plan` file from the CLI
+  bar, the GIF's loop and frame delays read back, every frame read back pixel for pixel, and headers that stay in
+  their panels on a small map), `test_scripts.py` 24 (5 on day 4; a `.plan` file from the CLI
   replayed among them). The pytest suite took 46 s (`pytest --durations=8 tests/python`, with another session
   running alongside): the two edit properties 4.0 and 3.6 s, the 11 Chrome tests 21.8 s run on their own. Branch
   coverage under the pytest suite (coverage.py 7.17.2 in a scratch venv, not a project dependency:
@@ -291,7 +292,8 @@ depend on load. Every number comes from the command next to it.
   drawing and loading checks): no console errors; the collision ring at t = 18 and the
   plan's ghosts trailing delayed robots where the replay puts them; Play, then Space pauses once, the right arrow
   steps once; maps 1.6 times wider than tall are stacked, so the 161 x 63 warehouse gets 6 px cells instead of 3 and
-  the 27 x 12 floor 35 px.
+  the 27 x 12 floor 35 px; no horizontal scrolling at 500, 600 or 800 px wide (a probe of `scrollWidth`; headless
+  Chrome's narrowest window is 500 px, so phone widths weren't checked).
 
 ## Results (day 4)
 
@@ -871,7 +873,7 @@ fix before had missed; no round found a bug in the simulator.
 
 No review agent ran today. The session started five hours late (the Mac slept from 10:12 to 15:01 with this run
 open), at the same time as the other track's session, which runs review agents of its own; on an earlier day two
-agents and a session together hit the account's usage limit and stalled both runs. So the review was mine, in four
+agents and a session together hit the account's usage limit and stalled both runs. So the review was mine, in five
 passes, each finding something:
 
 - **Reading it over** (`9d5912a`): `scripts/replay.py` ignored `--at` and `--steps` without `--delay-robot`, sent
@@ -881,6 +883,9 @@ passes, each finding something:
   languages, above.
 - **Coverage** (`599d230`): no test had a valid instance with an invalid plan (each earlier plan edit broke the
   instance first), and five refusals had no test.
+- **Small inputs** (`8f27d2d`): a GIF of a 5-cell-wide map ran each run's header into the next; panels now widen to
+  their headers, measured as palette-mode frames draw text (unantialiased glyphs come out wider than the font's own
+  measurements: a line measured at 202 pixels inked 213).
 - **Property tests** (`ba4beac`): 3,000 random corruptions of a replay showed the page's shape check accepting a
   file with `"planner": 7` (or a title, map name, policy or summary of the wrong type), after which the page failed
   with "toUpperCase is not a function" instead of saying what was wrong; the shape check now covers every field the
