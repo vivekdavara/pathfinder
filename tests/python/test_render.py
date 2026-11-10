@@ -5,7 +5,7 @@ import pytest
 
 import pathfinder as pf
 from pathfinder.replay import ReplayError, collisions_at, delayed_at, positions_at, record
-from pathfinder.simulator import random_delays
+from pathfinder.simulator import delay_robot, random_delays
 
 render = pytest.importorskip("pathfinder.render")  # Pillow is in requirements-dev.txt, so CI always has it
 from PIL import Image  # noqa: E402
@@ -25,7 +25,7 @@ def runs():
 
 
 def panel(img, replays, k):
-    """Replay k's map area of a frame."""
+    """Replay k's map area of a frame (the README's floor is wider than any header, so panels are map-wide)."""
     x = render.GAP + sum(r["map"]["width"] * CELL + render.GAP for r in replays[:k])
     r = replays[k]
     return img.crop((x, render.HEADER, x + r["map"]["width"] * CELL, render.HEADER + r["map"]["height"] * CELL))
@@ -130,6 +130,37 @@ def test_the_gif_holds_exactly_the_frames_drawn(runs, tmp_path):
         for k, frame in enumerate(drawn):
             gif.seek(k)
             assert gif.convert("RGB").tobytes() == frame.convert("RGB").tobytes(), k
+
+
+def test_headers_of_small_maps_stay_in_their_panels():
+    # Two runs on a 4 x 2 map: 56 pixels of map, far narrower than "CBS · timetable   t = 5.0". Each panel widens to
+    # its header, and every header pixel (anything not page-coloured above the maps) lies inside its own panel.
+    g = pf.Grid(4, 2)
+    instance = pf.Instance(g, [pf.Agent(0, 3), pf.Agent(4, 7)])
+    plan = [[0, 1, 2, 3], [4, 5, 6, 7]]
+    replays = [record(instance, plan, p, delay_robot(1, at=0, steps=2), planner="cbs")
+               for p in ("timetable", "ordered")]
+    frames = render.frames(replays, cell=CELL, substeps=1)
+    layout = render.panels(replays, CELL, [float(t) for t in range(len(frames))])
+    assert all(w > 4 * CELL for _, w in layout)
+    for frame in frames:
+        header = frame.crop((0, 0, frame.width, render.HEADER))
+        inside = {x for left, w in layout for x in range(left, left + w)}
+        for x in range(frame.width):
+            if x not in inside:
+                assert {header.getpixel((x, y)) for y in range(render.HEADER)} == {render.PAGE}, x
+
+
+def test_a_header_is_measured_at_its_widest_not_at_the_end():
+    # "0 collisions" (early) is longer than "1 collision" (at the end): the panel must fit the early one.
+    instance, plan = pf.Instance(pf.Grid(5, 1), [pf.Agent(0, 3), pf.Agent(1, 4)]), [[0, 1, 2, 3], [1, 2, 3, 4]]
+    replay = record(instance, plan, "timetable", delay_robot(1, at=0, steps=1), max_steps=1)
+    assert replay["summary"]["collisions"] == 1
+    small = render._font(12)
+    early = small.getlength(render._header(replay, 0.0)[1])
+    assert early > small.getlength(render._header(replay, 1.0)[1])
+    (_, w), = render.panels([replay], CELL, [0.0, 0.5, 1.0])
+    assert w >= early
 
 
 def test_the_renderer_refuses_what_it_cant_draw(runs, tmp_path):

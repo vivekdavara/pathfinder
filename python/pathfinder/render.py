@@ -15,6 +15,7 @@ the page's own functions.
 from __future__ import annotations
 
 import colorsys
+import math
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -120,9 +121,37 @@ def draw_map(replay: dict[str, Any], time: float, cell: int, base: Image.Image |
     return img
 
 
+def _header(replay: dict[str, Any], time: float) -> tuple[str, str]:
+    c = counts_at(replay, time)
+    return (f"{_label(replay)}   t = {time:.1f}",
+            f"{_count(c['delays'], 'delay step')} · {_count(c['collisions'], 'collision')} · "
+            f"{c['finished']}/{len(replay['robots'])} done")
+
+
+def panels(replays: Sequence[dict[str, Any]], cell: int, times: Sequence[float]) -> list[tuple[int, int]]:
+    """Each replay's panel in the frames, as (left x, width): as wide as its map or its widest header at any of
+    ``times``, whichever is wider (a small map's header would run into the next panel otherwise; and a header isn't
+    widest at the end: "0 collisions" is longer than "1 collision")."""
+    title, small = _font(13), _font(12)
+    # Measured as the frames draw it: in palette mode Pillow renders text unantialiased, with hinted glyphs that come
+    # out wider than the font's own getlength/getbbox say (a 202-pixel line inked 213 pixels).
+    measure = ImageDraw.Draw(Image.new("P", (1, 1)))
+
+    def right(font: Any, text: str) -> float:
+        return max(font.getlength(text), measure.textbbox((0, 0), text, font=font)[2])
+
+    out, x = [], GAP
+    for r in replays:
+        text = max(max(right(title, top), right(small, bottom)) for top, bottom in (_header(r, t) for t in times))
+        w = max(r["map"]["width"] * cell, math.ceil(text) + 1)
+        out.append((x, w))
+        x += w + GAP
+    return out
+
+
 def frames(replays: Sequence[dict[str, Any]], cell: int = 14, substeps: int = 4) -> list[Image.Image]:
     """The animation's frames: ``substeps`` per time step, from 0 to the longest run's end, each replay's map side by
-    side under its label and its counts at that moment."""
+    side under its label and its counts at that moment, in a panel as wide as the map or its header."""
     if not replays:
         raise ValueError("no replays to draw")
     if cell < 4 or substeps < 1:
@@ -130,24 +159,22 @@ def frames(replays: Sequence[dict[str, Any]], cell: int = 14, substeps: int = 4)
     for replay in replays:
         check(replay)
     end = max(len(r["delayed"]) for r in replays)
-    sizes = [(r["map"]["width"] * cell, r["map"]["height"] * cell) for r in replays]
+    times = [k / substeps for k in range(end * substeps + 1)]
+    sizes = [(w, r["map"]["height"] * cell) for r, (_, w) in zip(replays, panels(replays, cell, times))]
     width = GAP + sum(w + GAP for w, _ in sizes)
     height = HEADER + max(h for _, h in sizes) + GAP
     bases = [_base(r, cell) for r in replays]
     title, small = _font(13), _font(12)
     out = []
-    for k in range(end * substeps + 1):
-        time = k / substeps
+    for time in times:
         img = Image.new("P", (width, height), PAGE)
         img.putpalette(palette())
         d = ImageDraw.Draw(img)
         x = GAP
         for replay, base, (w, _) in zip(replays, bases, sizes):
-            c = counts_at(replay, time)
-            d.text((x, 6), f"{_label(replay)}   t = {time:.1f}", fill=TEXT, font=title)
-            d.text((x, 23), f"{_count(c['delays'], 'delay step')} · {_count(c['collisions'], 'collision')} · "
-                            f"{c['finished']}/{len(replay['robots'])} done",
-                   fill=COLLISION if c["collisions"] else MUTED, font=small)
+            top, bottom = _header(replay, time)
+            d.text((x, 6), top, fill=TEXT, font=title)
+            d.text((x, 23), bottom, fill=COLLISION if counts_at(replay, time)["collisions"] else MUTED, font=small)
             img.paste(draw_map(replay, time, cell, base), (x, HEADER))
             x += w + GAP
         out.append(img)
