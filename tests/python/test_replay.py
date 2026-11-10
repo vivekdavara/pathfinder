@@ -183,6 +183,13 @@ def test_a_changed_cost_is_refused(good):
     refused(good, cost, "summary.sum_of_costs")
 
 
+@pytest.mark.parametrize("key, value", [("steps", 1), ("completed", False), ("makespan", 0), ("delay_steps", 0),
+                                        ("collisions", 0), ("planned_sum_of_costs", 1), ("costs", [])])
+def test_every_summary_field_is_checked(good, key, value):
+    assert good["summary"][key] != value
+    refused(good, lambda r: r["summary"].__setitem__(key, value), f"summary.{key}")
+
+
 def test_a_float_where_an_integer_belongs_is_refused(good):
     def floats(r):
         r["trajectories"][0][0] = float(r["trajectories"][0][0])
@@ -364,3 +371,10 @@ def test_moments_of_the_corridor():
     assert [c["time"] for c in collisions_at(r, 1.49)] == [1] and [c["time"] for c in collisions_at(r, 1.5)] == [2]
     assert counts_at(r, 0) == {"delays": 1, "collisions": 0, "finished": 0}
     assert counts_at(r, 4) == {"delays": 1, "collisions": 3, "finished": 2}
+    # A collision at the run's last moment shows there (the run stopped at 3 steps, robots together at time 3).
+    stopped = record(instance, plan, "timetable", delay_robot(1, at=0, steps=1), max_steps=3)
+    assert len(stopped["delayed"]) == 3 and [c["time"] for c in collisions_at(stopped, 3)] == [3]
+    # A robot that starts on its goal and stays is done from time 0.
+    g = pf.Grid(3, 1)
+    still = record(pf.Instance(g, [pf.Agent(0, 0), pf.Agent(1, 2)]), [[0], [1, 2]], "ordered")
+    assert counts_at(still, 0)["finished"] == 1 and counts_at(still, 1)["finished"] == 2

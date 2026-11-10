@@ -125,6 +125,11 @@ test("counts: delays of steps begun, collisions reached, robots on their goals f
   assert.deepEqual(player.countsAt(r, 1), { delays: 1, collisions: 1, finished: 0 });
   assert.deepEqual(player.countsAt(r, 3), { delays: 1, collisions: 3, finished: 1 });
   assert.deepEqual(player.countsAt(r, 4), { delays: 1, collisions: 3, finished: 2 });
+  // A robot that starts on its goal and stays is done from time 0.
+  const still = { ...corridor(), robots: [{ start: 0, goal: 0 }, { start: 1, goal: 2 }], plan: [[0], [1, 2]],
+                  trajectories: [[0, 0], [1, 2]], delayed: [[]], collisions: [] };
+  assert.equal(player.countsAt(still, 0).finished, 1);
+  assert.equal(player.countsAt(still, 1).finished, 2);
 });
 
 test("robot colours differ between neighbours", () => {

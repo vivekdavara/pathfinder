@@ -360,7 +360,7 @@ collision under the timetable and into a wait under the ordered policy. Three pi
 outline in its colour. A dashed ring is where the *plan* has it at τ, on the plan's clock (clamped to the end of its
 path), so the gap between a robot and its ring is how far behind the delays have put it. A robot delayed in step
 ⌊τ⌋ gets an amber ring (and a pause sign on the page). A vertex collision at time T shows as a red ring on its cell
-from T − 0.5 to T + 0.5 (to the end, if T is the run's last moment); a swap as a red bar across the edge during its
+from T − 0.5 to T + 0.5; a swap as a red bar across the edge during its
 step. The counts under each run: robot-steps of delay in the steps begun, collisions reached, robots on their goals
 for good. Colours: hue `137.508 · i mod 360` (the golden angle), so neighbouring robot numbers differ.
 

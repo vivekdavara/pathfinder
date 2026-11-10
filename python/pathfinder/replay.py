@@ -216,8 +216,6 @@ def check(replay: Any) -> None:
         step = sim.step(held)
         if list(step.delayed) != held:
             _fail(f"delayed[{t}] lists robots that had already finished")
-    if summary["completed"] is not sim.done:
-        _fail(f"summary.completed is {summary['completed']!r}, but the run {'is' if sim.done else 'is not'} over")
     for i, (recorded, driven) in enumerate(zip(trajectories, sim.trajectories)):
         if not _same(recorded, driven):
             t = next(t for t, (a, b) in enumerate(zip(recorded, driven)) if not _same(a, b))
@@ -350,15 +348,14 @@ def delayed_at(replay: dict[str, Any], time: float) -> list[int]:
 
 
 def collisions_at(replay: dict[str, Any], time: float) -> list[dict[str, Any]]:
-    """The collisions to show at a moment: a vertex collision at time T from T - 0.5 to T + 0.5 (at the run's last
-    moment, to its end), a swap during its step."""
-    end = len(replay["delayed"])
+    """The collisions to show at a moment: a vertex collision at time T from T - 0.5 to T + 0.5, a swap during its
+    step."""
     shown = []
     for c in replay["collisions"]:
         if c["kind"] == "swap":
             if c["time"] <= time < c["time"] + 1:
                 shown.append(c)
-        elif c["time"] - 0.5 <= time < (end + 1 if c["time"] == end else c["time"] + 0.5):
+        elif c["time"] - 0.5 <= time < c["time"] + 0.5:
             shown.append(c)
     return shown
 

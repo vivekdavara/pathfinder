@@ -62,14 +62,12 @@ function delayedAt(replay, time) {
   return replay.delayed[Math.floor(time)];
 }
 
-// The collisions to show at a moment: a vertex collision at time T from T - 0.5 to T + 0.5 (clamped to the run), a
-// swap during its step [t, t + 1).
+// The collisions to show at a moment: a vertex collision at time T from T - 0.5 to T + 0.5 (so one at the run's last
+// moment shows at its end), a swap during its step [t, t + 1).
 function collisionsAt(replay, time) {
-  const end = steps(replay);
   return replay.collisions.filter((c) => {
     if (c.kind === "swap") return c.time <= time && time < c.time + 1;
-    const last = c.time === end ? end + 1 : c.time + 0.5; // the last moment of the run shows its collisions
-    return c.time - 0.5 <= time && time < last;
+    return c.time - 0.5 <= time && time < c.time + 0.5;
   });
 }
 
